@@ -21,7 +21,7 @@ PipeBag.prototype.unpipe = function(writable) {
 	}
 };
 
-Pipe.prototype.eachPipe = function(callback) {
+PipeBag.prototype.eachPipe = function(callback) {
 	this._pipes.forEach(function(pipe, i) {
 		callback(pipe.writable, i);
 	});
