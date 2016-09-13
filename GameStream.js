@@ -226,7 +226,8 @@ GameStream.prototype._emitGameUpdates = function(gameUpdates) {
 	if (gameUpdates.length) {
 		var updates = [{}].concat(gameUpdates.map(function(gameUpdate) { return gameUpdate.update; }));
 		var squashed = deepAssign.apply(null, updates);
-		this.emit('data', squashed);
+		this.emit('update', squashed);
+		this.emit('data',gameUpdates);
 		this._pipes.forEach(function(pipe) {
 			pipe.writable.write(gameUpdates);
 		});

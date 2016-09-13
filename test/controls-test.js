@@ -35,7 +35,7 @@ var stream1 = new GameStream({
 	lag: LAG_MS
 });
 
-stream1.on('data', outputState);
+stream1.on('update', outputState);
 
 setInterval(updateState, UPDATE_INTERVAL_MS);
 
@@ -61,7 +61,7 @@ function rewind() {
 
 function fastForward() {
 	console.info('-- fast forwarding');
-	stream1.fastForward();
+	stream1.fastForward(5);
 	setTimeout(play, CONTROLS_SWITCH_INTERVAL_MS);
 }
 

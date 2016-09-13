@@ -38,4 +38,4 @@ var stream3 = new GameStream({
 	lag: 1000
 });
 stream2.pipe(stream3);
-stream3.on('data', outputState);
+stream3.on('update', outputState);

@@ -2,9 +2,9 @@
 var GameStream = require('../');
 var now = require('../now');
 
-var PUSH_INTERVAL_MS = 1000;
+var PUSH_INTERVAL_MS = 100;
 var LAG_MS = 10;
-var UPDATE_INTERVAL_MS = 100;
+var UPDATE_INTERVAL_MS = 200;
 
 
 
@@ -34,6 +34,6 @@ var stream1 = new GameStream({
 	lag: LAG_MS
 });
 
-stream1.on('data', outputState);
+stream1.on('update', outputState);
 
 setInterval(updateState, UPDATE_INTERVAL_MS);
