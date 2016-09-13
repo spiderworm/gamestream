@@ -2,7 +2,7 @@
 var GameStream = require('../');
 var now = require('../now');
 
-var PUSH_INTERVAL_MS = 100;
+var PUSH_INTERVAL_MS = 0;
 var LAG_MS = 10;
 var UPDATE_INTERVAL_MS = 200;
 
