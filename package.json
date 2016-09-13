@@ -1,0 +1,22 @@
+{
+  "name": "gamestream",
+  "version": "0.0.1",
+  "description": "Store, stream, and playback your game state on client and server.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/spiderworm/gamestream.git"
+  },
+  "author": "David Millet",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/spiderworm/gamestream/issues"
+  },
+  "homepage": "https://github.com/spiderworm/gamestream#readme",
+  "dependencies": {
+    "deep-assign": "^2.0.0"
+  }
+}
