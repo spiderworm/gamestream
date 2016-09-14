@@ -2,7 +2,7 @@
 var GameStream = require('../');
 var now = require('../now');
 
-var PUSH_INTERVAL_MS = 500;
+var PUSH_INTERVAL_MS = 0;
 var LAG_MS = 10;
 var UPDATE_INTERVAL_MS = 500;
 var CONTROLS_SWITCH_INTERVAL_MS = 3000;
@@ -19,9 +19,11 @@ function updateState() {
 	state.count++;
 	timeLogs[state.count] = now();
 	stream1.updateNow({count: state.count});
+	//console.info('time is now',stream1.time);
 }
 
 function outputState(update) {
+	//return;
 	var delay = now() - timeLogs[update.count];
 	console.info(
 		now() + ':',
@@ -55,13 +57,13 @@ function pause() {
 
 function rewind() {
 	console.info('-- rewinding');
-	stream1.rewind();
+	stream1.rewind(1);
 	setTimeout(fastForward, CONTROLS_SWITCH_INTERVAL_MS);
 }
 
 function fastForward() {
 	console.info('-- fast forwarding');
-	stream1.fastForward(5);
+	stream1.fastForward(1.5);
 	setTimeout(play, CONTROLS_SWITCH_INTERVAL_MS);
 }
 
