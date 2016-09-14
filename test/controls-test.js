@@ -19,11 +19,9 @@ function updateState() {
 	state.count++;
 	timeLogs[state.count] = now();
 	stream1.updateNow({count: state.count});
-	//console.info('time is now',stream1.time);
 }
 
 function outputState(update) {
-	//return;
 	var delay = now() - timeLogs[update.count];
 	console.info(
 		now() + ':',

@@ -1,7 +1,6 @@
 
 var Stream = require('stream');
 var inherits = require('inherits');
-var deepAssign = require('deep-assign');
 var now = require('./now.js');
 var GameState = require('./GameState.js');
 var GameStatesBag = require('./GameStatesBag.js');

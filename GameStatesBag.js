@@ -52,12 +52,10 @@ GameStatesBag.prototype._updateAt = function(gameState, index) {
 
 GameStatesBag.prototype._computeStateValuesAt = function(index) {
 	for (var i=index; i<this._states.length; i++) {
-		if (i > 0) {
-			GameState.setPreviousState(
-				this._states[i],
-				this._states[i - 1]
-			);
-		}
+		GameState.setPreviousState(
+			this._states[i],
+			i > 0 ? this._states[i - 1] : null
+		);
 	}
 };
 

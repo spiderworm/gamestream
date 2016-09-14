@@ -1,19 +1,28 @@
 
-var deepAssign = require('deep-assign');
+var cloneUtil = require('./cloneUtil.js');
 
 function GameState(time, updateValues) {
 	this.time = time;
 	this.update = updateValues;
 	this.values = updateValues;
+	this.reverseUpdate = {};
 }
 
 GameState.setPreviousState = function(targetState, previousState) {
-	this.computeValues(targetState, previousState.values);
+	var previousValues = previousState ? previousState.values : {};
+	this.computeValues(targetState, previousValues);
+	this.computeReverseUpdate(targetState, previousValues);
 };
 
 GameState.computeValues = function(targetState, previousStateValues) {
-	var values = deepAssign({}, previousStateValues, targetState.update);
+	var values = cloneUtil.clone(previousStateValues, targetState.update);
 	targetState.values = values;
+};
+
+GameState.computeReverseUpdate = function(targetState, previousStateValues) {
+	var reverseUpdate = cloneUtil.clone(targetState.update);
+	cloneUtil.cloneNarrow(reverseUpdate, previousStateValues);
+	targetState.reverseUpdate = reverseUpdate;
 };
 
 module.exports = GameState;

@@ -106,7 +106,7 @@ Playback.prototype._bufferForwards = function(gameState, endTime) {
 		}
 		updates.push(testState);
 	}
-	this._bufferUpdates(updates);
+	this._bufferUpdates(updates, false);
 };
 
 Playback.prototype._bufferBackwards = function(gameState, endTime) {
@@ -119,10 +119,10 @@ Playback.prototype._bufferBackwards = function(gameState, endTime) {
 		}
 		updates.push(testState);
 	}
-	this._bufferUpdates(updates);
+	this._bufferUpdates(updates, true);
 };
 
-Playback.prototype._bufferUpdates = function(gameStates) {
+Playback.prototype._bufferUpdates = function(gameStates, reverse) {
 	if (gameStates.length) {
 		this._lastBuffered = gameStates[gameStates.length - 1];
 		var realTime = now();
@@ -130,7 +130,7 @@ Playback.prototype._bufferUpdates = function(gameStates) {
 			gameStates.map(function(state) {
 				return new TimedUpdate(
 					this._time.getRealTime(state.time),
-					state.update
+					reverse ? state.reverseUpdate : state.update
 				);
 			}.bind(this))
 		);
