@@ -1,11 +1,13 @@
 
 var now = require('./now.js');
 var TimedUpdate = require('./TimedUpdate.js');
+var PlaybackTimer = require('./PlaybackTimer.js');
 
 function Playback(gameStatesBag) {
 	this._states = gameStatesBag;
 	this._updateBuffer = [];
-	this._speed = 1;
+	var time = now();
+	this._time = new PlaybackTimer(time, time, 1);
 }
 
 Playback.exposeInterface = function(target, playback) {
@@ -27,13 +29,13 @@ Playback.exposeInterface = function(target, playback) {
 };
 
 Object.defineProperty(Playback.prototype, 'speed', {
-	get: function() { return this._speed; },
+	get: function() { return this._time.speed; },
 	set: function(speed) { this.setSpeed(speed); }
 });
 
 Object.defineProperty(Playback.prototype, 'time', {
-	get: function() { return this.getTime(); },
-	set: function(time) { this.setTime(time); }
+	get: function() { return this._time.playback; },
+	set: function(time) { this._time.playback = time; }
 });
 
 Playback.prototype.getState = function() {
@@ -65,33 +67,23 @@ Playback.prototype.rewind = function(speed) {
 
 Playback.prototype.setSpeed = function(speed) {
 	this.bufferUpdates();
-	this._times = {
-		lastActual: now(),
-		lastComputed: this.getTime()
-	};
-	this._speed = speed;
+	this._time.setSpeed(speed);
 };
 
 Playback.prototype.getTime = function() {
-	var real = now();
-	var realDelta = real - this._times.lastActual;
-	var time = Math.floor(this._times.lastComputed + (this._speed * realDelta));
-	return time;
+	return this._time.playback;
 };
 
 Playback.prototype.setTime = function(time) {
-	this._times = {
-		lastActual: now(),
-		lastComputed: time
-	};
+	this._time.setPlaybackTime(time);
 };
 
 Playback.prototype.bufferUpdates = function() {
-	if (this._speed === 0) {
+	if (this._time.speed === 0) {
 		return;
 	}
 	var endTime = this.getTime();
-	if (this._speed > 0) {
+	if (this._time.speed > 0) {
 		this._bufferForwards(this._lastBuffered, endTime);
 	} else {
 		this._bufferBackwards(this._lastBuffered, endTime);
@@ -133,14 +125,14 @@ Playback.prototype._bufferBackwards = function(gameState, endTime) {
 Playback.prototype._bufferUpdates = function(gameStates) {
 	if (gameStates.length) {
 		this._lastBuffered = gameStates[gameStates.length - 1];
-		var time = now();
+		var realTime = now();
 		this._updateBuffer = this._updateBuffer.concat(
 			gameStates.map(function(state) {
 				return new TimedUpdate(
-					time,
+					this._time.getRealTime(state.time),
 					state.update
 				);
-			})
+			}.bind(this))
 		);
 	}
 };

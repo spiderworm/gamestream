@@ -37,7 +37,9 @@ var stream1 = new GameStream({
 	lag: LAG_MS
 });
 
-stream1.on('update', outputState);
+var stream2 = new GameStream();
+stream2.on('update', outputState);
+stream1.pipe(stream2);
 
 setInterval(updateState, UPDATE_INTERVAL_MS);
 
