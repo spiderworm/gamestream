@@ -10,7 +10,10 @@ function Playback(gameStatesBag) {
 
 Playback.exposeInterface = function(target, playback) {
 	var instance = null;
-	var methods = ['play', 'pause', 'fastForward', 'rewind', 'setSpeed', 'getTime', 'setTime'];
+	var methods = [
+		'play', 'pause', 'fastForward', 'rewind',
+		'setSpeed', 'getTime', 'setTime'
+	];
 	methods.forEach(function(name) {
 		target[name] = playback[name].bind(playback);
 	});
@@ -32,6 +35,10 @@ Object.defineProperty(Playback.prototype, 'time', {
 	get: function() { return this.getTime(); },
 	set: function(time) { this.setTime(time); }
 });
+
+Playback.prototype.getState = function() {
+	return this._states.getStateAt(this.getTime());
+};
 
 Playback.prototype.play = function() {
 	this.setSpeed(1);

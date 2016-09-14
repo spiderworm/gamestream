@@ -1,4 +1,6 @@
 
+var GameState = require('./GameState.js');
+
 function GameStatesBag() {
 	this._states = [];
 }
@@ -9,6 +11,17 @@ Object.defineProperty(GameStatesBag.prototype, 'length', {
 
 GameStatesBag.prototype.get = function(index) {
 	return this._states[index];
+};
+
+GameStatesBag.prototype.getStateAt = function(time) {
+	if (this._states.length) {
+		for (var i=this._states.length - 1; i>0; i--) {
+			if (this._states[i].time <= time) {
+				return this._states[i];
+			}
+		}
+		return this._states[0];
+	}
 };
 
 GameStatesBag.prototype.indexOf = function(gameState) {
@@ -34,13 +47,16 @@ GameStatesBag.prototype._insertAt = function(gameState, index) {
 };
 
 GameStatesBag.prototype._updateAt = function(gameState, index) {
-	throw new Error('not implemented yet');
+	throw new Error('TODO: implement me');
 };
 
 GameStatesBag.prototype._computeStateValuesAt = function(index) {
 	for (var i=index; i<this._states.length; i++) {
 		if (i > 0) {
-			this._states[i].computeValues(this._states[i - 1]);
+			GameState.setPreviousState(
+				this._states[i],
+				this._states[i - 1]
+			);
 		}
 	}
 };

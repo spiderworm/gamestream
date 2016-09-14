@@ -1,22 +1,19 @@
 
 var deepAssign = require('deep-assign');
 
-function GameState(time, update) {
+function GameState(time, updateValues) {
 	this.time = time;
-	this.update = update;
-	this.values = update;
+	this.update = updateValues;
+	this.values = updateValues;
 }
 
-GameState.prototype.computeValues = function(gameState) {
-	var values = {};
+GameState.setPreviousState = function(targetState, previousState) {
+	this.computeValues(targetState, previousState.values);
+};
 
-	if (gameState) {
-		deepAssign(values, gameState.values);
-	}
-
-	deepAssign(values, this.update);
-
-	this.values = values;
-}
+GameState.computeValues = function(targetState, previousStateValues) {
+	var values = deepAssign({}, previousStateValues, targetState.update);
+	targetState.values = values;
+};
 
 module.exports = GameState;

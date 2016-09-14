@@ -13,6 +13,7 @@ function GameStream(opts) {
 	if (!(this instanceof GameStream)) return new GameStream(opts);
 	opts = opts || {};
 
+	this.push = opts.push !== undefined ? opts.push : true;
 	this.pushInterval = opts.pushInterval || 0;
 	this.lag = opts.lag || 0;
 
@@ -30,17 +31,29 @@ inherits(GameStream, Stream);
 
 Object.defineProperty(GameStream.prototype, 'pushInterval', {
 	get: function() { return this._pushInterval; },
-	set: function(pushInterval) {
-		pushInterval = pushInterval > 0 ? pushInterval : 0;
-		if (this._pushIntervalID) {
-			clearInterval(this._pushIntervalID);
+	set: function(val) {
+		val = val > 0 ? val : 0;
+		if (val !== this._pushInterval) {
+			this._pushInterval = val;
+			this._updatePushing();
 		}
-		this._pushInterval = pushInterval;
-		this._pushIntervalID = setInterval(
-			this._pushUpdates.bind(this),
-			pushInterval
-		);
 	}
+});
+
+Object.defineProperty(GameStream.prototype, 'push', {
+	get: function() { return this._push; },
+	set: function(val) {
+		val = !!val;
+		if (val !== this._push) {
+			this._push = val;
+			this._updatePushing();
+		}
+	}
+});
+
+Object.defineProperty(GameStream.prototype, 'state', {
+	get: function() { return this.getState(); },
+	set: function(stateValues) { this.setStateAt(this.getTime(), stateValues); }
 });
 
 GameStream.prototype.write = function(gameStates) {
@@ -58,6 +71,29 @@ GameStream.prototype.updateAt = function(time, update) {
 GameStream.prototype.updateNow = function(update) {
 	var time = now();
 	this.updateAt(time, update);
+};
+
+GameStream.prototype.setStateAt = function(time, values) {
+	throw new Error('TODO: implement me');
+	//var state = new GameState(time, values);
+};
+
+GameStream.prototype.getState = function() {
+	var gameState = this._playback.getState();
+	return gameState ? gameState.values : undefined;
+};
+
+GameStream.prototype._updatePushing = function() {
+	if (this._pushIntervalID) {
+		clearInterval(this._pushIntervalID);
+		delete this._pushIntervalID;
+	}
+	if (this._push) {
+		this._pushIntervalID = setInterval(
+			this._pushUpdates.bind(this),
+			this._pushInterval
+		);
+	}
 };
 
 GameStream.prototype._pushUpdates = function() {
