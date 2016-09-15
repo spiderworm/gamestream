@@ -58,8 +58,7 @@ Object.defineProperty(GameStream.prototype, 'state', {
 
 GameStream.prototype.write = function(outputStates) {
 	outputStates.forEach(function(ouputState) {
-		var state = new GameState(ouputState.time, ouputState.update);
-		state.speed = ouputState.speed;
+		var state = GameState.fromOutputState(ouputState);
 		this._states.insertLate(state);
 	}.bind(this));
 	return true;

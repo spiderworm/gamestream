@@ -3,7 +3,7 @@ var GameStream = require('../');
 var now = require('../now.js');
 
 var UPDATE_INTERVAL_MS = 50;
-var CONTROLS_SWITCH_INTERVAL_MS = 3000;
+var CONTROLS_SWITCH_INTERVAL_MS = 1000;
 
 
 

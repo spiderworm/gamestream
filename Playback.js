@@ -133,14 +133,9 @@ Playback.prototype._bufferUpdates = function(gameStates, reverse) {
 		var realTime = now();
 		this._updateBuffer = this._updateBuffer.concat(
 			gameStates.map(function(state) {
-				var update = new OutputState(
-					this._time.getRealTime(state.time),
-					reverse ? state.reverseUpdate : state.update
-				);
-				if (state.speed !== undefined) {
-					update.speed = state.speed;
-				}
-				return update;
+				var time = this._time.getRealTime(state.time);
+				var outputState = OutputState.fromGameState(time, state, reverse);
+				return outputState;
 			}.bind(this))
 		);
 	}
