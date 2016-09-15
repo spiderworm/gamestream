@@ -26,15 +26,17 @@ function updateState() {
 	stream1.updateNow(state);
 }
 
-function outputState(info) {
-	var delay = now() - timeLogs[info.update.count];
-	console.info(
-		now() + ':',
-		'received update with a delay of ' + delay + ' ms',
-		'and the temp property',
-		(info.update.hasOwnProperty('temp') ? 'was' : 'WAS NOT (uh oh)'),
-		'preserved'
-	);
+function outputState(data) {
+	if (data.update) {
+		var delay = now() - timeLogs[data.update.count];
+		console.info(
+			now() + ':',
+			'received update with a delay of ' + delay + ' ms',
+			'and the temp property',
+			(data.update.hasOwnProperty('temp') ? 'was' : 'WAS NOT (uh oh)'),
+			'preserved'
+		);
+	}
 }
 
 var stream1 = new GameStream({
@@ -42,6 +44,6 @@ var stream1 = new GameStream({
 	lag: LAG_MS
 });
 
-stream1.on('update', outputState);
+stream1.on('data', outputState);
 
 setInterval(updateState, UPDATE_INTERVAL_MS);

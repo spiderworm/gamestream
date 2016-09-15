@@ -15,7 +15,7 @@ var stream1 = new GameStream({
 
 function updateState() {
 	state.count++;
-	stream1.updateNow({count: state.count});
+	stream1.updateNow(state);
 }
 
 function outputState() {
@@ -23,7 +23,7 @@ function outputState() {
 	console.info('pulled state:', JSON.stringify(state));
 }
 
-stream1.on('update', function() { throw new Error('state should not be getting pushed out'); });
+stream1.on('data', function() { throw new Error('data should not be getting pushed out'); });
 
 setInterval(updateState, UPDATE_INTERVAL_MS);
 setInterval(outputState, PULL_INTERVAL_MS);

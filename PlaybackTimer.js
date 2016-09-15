@@ -1,10 +1,10 @@
 
 var now = require('./now.js');
 
-function PlaybackTimer(playTime, realTime, speed) {
+function PlaybackTimer(playTime, realTime) {
 	this._lastPlayback = playTime;
 	this._lastReal = realTime;
-	this.speed = speed;
+	this._speed = 0;
 }
 
 Object.defineProperty(PlaybackTimer.prototype, 'real', {

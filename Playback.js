@@ -2,12 +2,14 @@
 var now = require('./now.js');
 var TimedUpdate = require('./TimedUpdate.js');
 var PlaybackTimer = require('./PlaybackTimer.js');
+var GameState = require('./GameState.js');
 
 function Playback(gameStatesBag) {
 	this._states = gameStatesBag;
 	this._updateBuffer = [];
 	var time = now();
-	this._time = new PlaybackTimer(time, time, 1);
+	this._time = new PlaybackTimer(time, time);
+	this.setSpeed(1);
 }
 
 Playback.exposeInterface = function(target, playback) {
@@ -67,6 +69,9 @@ Playback.prototype.rewind = function(speed) {
 
 Playback.prototype.setSpeed = function(speed) {
 	this.bufferUpdates();
+	var update = new TimedUpdate(now());
+	update.speed = speed;
+	this._updateBuffer.push(update);
 	this._time.setSpeed(speed);
 };
 
@@ -128,10 +133,14 @@ Playback.prototype._bufferUpdates = function(gameStates, reverse) {
 		var realTime = now();
 		this._updateBuffer = this._updateBuffer.concat(
 			gameStates.map(function(state) {
-				return new TimedUpdate(
+				var update = new TimedUpdate(
 					this._time.getRealTime(state.time),
 					reverse ? state.reverseUpdate : state.update
 				);
+				if (state.speed !== undefined) {
+					update.speed = state.speed;
+				}
+				return update;
 			}.bind(this))
 		);
 	}

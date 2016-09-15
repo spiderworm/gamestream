@@ -19,19 +19,24 @@ function updateState() {
 	stream1.updateNow(state);
 }
 
-function outputUpdate(info) {
-	var delay = now() - timeLogs[info.update.count];
-	console.info(
-		now() + ':',
-		'received update with a delay of ' + delay + ' ms:',
-		JSON.stringify(info.update)
-	);
+function outputUpdate(data) {
+	if (data.speed !== undefined) {
+		console.info('speed update:',data.speed);
+	}
+	if (data.update) {
+		var delay = now() - timeLogs[data.update.count];
+		console.info(
+			now() + ':',
+			'received update with a delay of ' + delay + ' ms:',
+			JSON.stringify(data.update)
+		);
+	}
 }
 
 var stream1 = new GameStream();
 
 var stream2 = new GameStream();
-stream2.on('update', outputUpdate);
+stream2.on('data', outputUpdate);
 stream1.pipe(stream2);
 
 setInterval(updateState, UPDATE_INTERVAL_MS);

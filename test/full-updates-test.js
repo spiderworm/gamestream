@@ -20,22 +20,31 @@ function updateState() {
 function outputUpdates(updates) {
 	console.info('-------- received set of updates ----------');
 	console.info('merged: ', GameStream.mergeUpdates(updates));
-	updates.forEach(function(info) {
-		var delay = now() - timeLogs[info.update.count];
-		console.info(
-			now() + ':',
-			'received update with a delay of ' + delay + ' ms:',
-			JSON.stringify(info)
-		);
+	var time = now();
+	updates.forEach(function(data) {
+		if (data.speed !== undefined) {
+			console.info(
+				time + ':',
+				'speed update:', JSON.stringify(data)
+			);
+		}
+		if (data.update) {
+			var delay = time - timeLogs[data.update.count];
+			console.info(
+				time + ':',
+				'received update with a delay of ' + delay + ' ms:',
+				JSON.stringify(data)
+			);
+		}
 	});
 }
 
 var stream1 = new GameStream({
-	fullUpdatesMode: true,
+	fullDataMode: true,
 	pushInterval: PUSH_INTERVAL_MS
 });
 
-stream1.on('full-updates', outputUpdates);
-stream1.on('update', function() { throw new Error('should not be getting merged update when in full updates mode'); });
+stream1.on('full-data', outputUpdates);
+stream1.on('data', function() { throw new Error('should not be getting merged update when in full data mode'); });
 
 setInterval(updateState, UPDATE_INTERVAL_MS);
