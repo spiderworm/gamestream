@@ -2,6 +2,7 @@
 var cloneUtil = require('./cloneUtil.js');
 
 function GameState(time, updateValues) {
+	updateValues = cloneUtil.clone(updateValues);
 	this.time = time;
 	this.update = updateValues;
 	this.values = updateValues;

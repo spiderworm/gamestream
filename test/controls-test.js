@@ -19,35 +19,12 @@ function updateState() {
 	stream1.updateNow(state);
 }
 
-function outputUpdate(update) {
-	var delay = now() - timeLogs[update.count];
+function outputUpdate(info) {
+	var delay = now() - timeLogs[info.update.count];
 	console.info(
 		now() + ':',
 		'received update with a delay of ' + delay + ' ms:',
-		JSON.stringify(update)
-	);
-}
-
-function outputState(state) {
-	var delay = now() - timeLogs[state.update.count];
-	console.info(
-		now() + ':',
-		'received state with a delay of ' + delay + ' ms:',
-		JSON.stringify(state)
-	);
-}
-
-function outputDataBurst(burst) {
-	console.info(
-		now() + ':',
-		'----received a burst----:'
-	);
-	burst.forEach(function(gameState) {
-		//outputUpdate(gameState.update);
-		outputState(gameState);
-	});
-	console.info(
-		'------------------------'
+		JSON.stringify(info.update)
 	);
 }
 
@@ -55,7 +32,6 @@ var stream1 = new GameStream();
 
 var stream2 = new GameStream();
 stream2.on('update', outputUpdate);
-//stream2.on('data', outputDataBurst);
 stream1.pipe(stream2);
 
 setInterval(updateState, UPDATE_INTERVAL_MS);

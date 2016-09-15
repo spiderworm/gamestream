@@ -26,13 +26,13 @@ function updateState() {
 	stream1.updateNow(state);
 }
 
-function outputState(update) {
-	var delay = now() - timeLogs[update.count];
+function outputState(info) {
+	var delay = now() - timeLogs[info.update.count];
 	console.info(
 		now() + ':',
 		'received update with a delay of ' + delay + ' ms',
 		'and the temp property',
-		(update.hasOwnProperty('temp') ? 'was' : 'WAS NOT (uh oh)'),
+		(info.update.hasOwnProperty('temp') ? 'was' : 'WAS NOT (uh oh)'),
 		'preserved'
 	);
 }

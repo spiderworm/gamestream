@@ -7,16 +7,16 @@ var GameStatesBag = require('./GameStatesBag.js');
 var addPipeBagTo = require('./addPipeBagTo.js');
 var Playback = require('./Playback.js');
 var TimedUpdate = require('./TimedUpdate.js');
-var cloneUtil = require('./cloneUtil.js');
+var mergeTimedUpdates = require('./mergeTimedUpdates.js');
 
 function GameStream(opts) {
-	if (!(this instanceof GameStream)) return new GameStream(opts);
+	if (!(this instanceof GameStream)) { return new GameStream(opts); }
 	opts = opts || {};
 
 	this.push = opts.push !== undefined ? opts.push : true;
 	this.pushInterval = opts.pushInterval || 0;
 	this.lag = opts.lag || 0;
-	this.fullUpdates = !!opts.fullUpdates;
+	this.fullUpdatesMode = !!opts.fullUpdatesMode;
 
 	this._states = new GameStatesBag();
 	this._playback = new Playback(this._states);
@@ -65,13 +65,11 @@ GameStream.prototype.write = function(gameStates) {
 };
 
 GameStream.prototype.updateAt = function(time, update) {
-	update = cloneUtil.clone(update);
 	var state = new GameState(time, update);
 	this._states.insertLate(state);
 };
 
 GameStream.prototype.updateNow = function(update) {
-	update = cloneUtil.clone(update);
 	var time = now();
 	this.updateAt(time, update);
 };
@@ -107,11 +105,10 @@ GameStream.prototype._pushUpdates = function() {
 
 GameStream.prototype._emitGameUpdates = function(gameUpdates) {
 	if (gameUpdates.length) {
-		if (this.fullUpdates) {
-			this.emit('update', gameUpdates);
+		if (this.fullUpdatesMode) {
+			this.emit('full-updates', gameUpdates);
 		} else {
-			var squashed = TimedUpdate.squash(gameUpdates);
-			this.emit('update', squashed.update);
+			this.emit('update', mergeTimedUpdates(gameUpdates));
 		}
 		this.eachPipe(function(writable) {
 			writable.write(gameUpdates);

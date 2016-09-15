@@ -14,12 +14,12 @@ function updateState() {
 	stream1.updateNow({count: state.count});
 }
 
-function outputState(update) {
-	var delay = now() - timeLogs[update.count];
+function outputUpdate(info) {
+	var delay = now() - timeLogs[info.update.count];
 	console.info(
 		now() + ':',
 		'received update with a delay of ' + delay + ' ms:',
-		JSON.stringify(update)
+		JSON.stringify(info.update)
 	);
 }
 
@@ -38,4 +38,4 @@ var stream3 = new GameStream({
 	lag: 1000
 });
 stream2.pipe(stream3);
-stream3.on('update', outputState);
+stream3.on('update', outputUpdate);
