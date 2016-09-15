@@ -6,8 +6,7 @@ var GameState = require('./GameState.js');
 var GameStatesBag = require('./GameStatesBag.js');
 var addPipeBagTo = require('./addPipeBagTo.js');
 var Playback = require('./Playback.js');
-var TimedUpdate = require('./TimedUpdate.js');
-var mergeTimedUpdates = require('./mergeTimedUpdates.js');
+var mergeStates = require('./mergeStates.js');
 
 function GameStream(opts) {
 	if (!(this instanceof GameStream)) { return new GameStream(opts); }
@@ -57,10 +56,10 @@ Object.defineProperty(GameStream.prototype, 'state', {
 	set: function(stateValues) { this.setStateAt(this.getTime(), stateValues); }
 });
 
-GameStream.prototype.write = function(timedUpdates) {
-	timedUpdates.forEach(function(timedUpdate) {
-		var state = new GameState(timedUpdate.time, timedUpdate.update);
-		state.speed = timedUpdate.speed;
+GameStream.prototype.write = function(outputStates) {
+	outputStates.forEach(function(ouputState) {
+		var state = new GameState(ouputState.time, ouputState.update);
+		state.speed = ouputState.speed;
 		this._states.insertLate(state);
 	}.bind(this));
 	return true;
@@ -110,7 +109,7 @@ GameStream.prototype._emitGameUpdates = function(gameUpdates) {
 		if (this.fullDataMode) {
 			this.emit('full-data', gameUpdates);
 		} else {
-			this.emit('data', mergeTimedUpdates(gameUpdates));
+			this.emit('data', mergeStates(gameUpdates));
 		}
 		this.eachPipe(function(writable) {
 			writable.write(gameUpdates);

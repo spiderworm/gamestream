@@ -19,7 +19,7 @@ function updateState() {
 
 function outputUpdates(updates) {
 	console.info('-------- received set of updates ----------');
-	console.info('merged: ', GameStream.mergeUpdates(updates));
+	console.info('merged: ', GameStream.mergeStates(updates));
 	var time = now();
 	updates.forEach(function(data) {
 		if (data.speed !== undefined) {

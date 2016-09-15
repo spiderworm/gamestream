@@ -1,6 +1,6 @@
 
 var now = require('./now.js');
-var TimedUpdate = require('./TimedUpdate.js');
+var OutputState = require('./OutputState.js');
 var PlaybackTimer = require('./PlaybackTimer.js');
 var GameState = require('./GameState.js');
 
@@ -69,7 +69,7 @@ Playback.prototype.rewind = function(speed) {
 
 Playback.prototype.setSpeed = function(speed) {
 	this.bufferUpdates();
-	var update = new TimedUpdate(now());
+	var update = new OutputState(now());
 	update.speed = speed;
 	this._updateBuffer.push(update);
 	this._time.setSpeed(speed);
@@ -133,7 +133,7 @@ Playback.prototype._bufferUpdates = function(gameStates, reverse) {
 		var realTime = now();
 		this._updateBuffer = this._updateBuffer.concat(
 			gameStates.map(function(state) {
-				var update = new TimedUpdate(
+				var update = new OutputState(
 					this._time.getRealTime(state.time),
 					reverse ? state.reverseUpdate : state.update
 				);
