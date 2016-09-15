@@ -7,6 +7,7 @@ var GameStatesBag = require('./GameStatesBag.js');
 var addPipeBagTo = require('./addPipeBagTo.js');
 var Playback = require('./Playback.js');
 var TimedUpdate = require('./TimedUpdate.js');
+var cloneUtil = require('./cloneUtil.js');
 
 function GameStream(opts) {
 	if (!(this instanceof GameStream)) return new GameStream(opts);
@@ -63,11 +64,13 @@ GameStream.prototype.write = function(gameStates) {
 };
 
 GameStream.prototype.updateAt = function(time, update) {
+	update = cloneUtil.clone(update);
 	var state = new GameState(time, update);
 	this._states.insertLate(state);
 };
 
 GameStream.prototype.updateNow = function(update) {
+	update = cloneUtil.clone(update);
 	var time = now();
 	this.updateAt(time, update);
 };

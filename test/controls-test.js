@@ -1,10 +1,8 @@
 
 var GameStream = require('../');
-var now = require('../now');
+var now = require('../now.js');
 
-var PUSH_INTERVAL_MS = 0;
-var LAG_MS = 10;
-var UPDATE_INTERVAL_MS = 500;
+var UPDATE_INTERVAL_MS = 50;
 var CONTROLS_SWITCH_INTERVAL_MS = 3000;
 
 
@@ -18,7 +16,7 @@ var state = {
 function updateState() {
 	state.count++;
 	timeLogs[state.count] = now();
-	stream1.updateNow({count: state.count});
+	stream1.updateNow(state);
 }
 
 function outputUpdate(update) {
@@ -53,10 +51,7 @@ function outputDataBurst(burst) {
 	);
 }
 
-var stream1 = new GameStream({
-	pushInterval: PUSH_INTERVAL_MS,
-	lag: LAG_MS
-});
+var stream1 = new GameStream();
 
 var stream2 = new GameStream();
 stream2.on('update', outputUpdate);
