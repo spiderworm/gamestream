@@ -16,6 +16,7 @@ function GameStream(opts) {
 	this.push = opts.push !== undefined ? opts.push : true;
 	this.pushInterval = opts.pushInterval || 0;
 	this.lag = opts.lag || 0;
+	this.fullUpdates = !!opts.fullUpdates;
 
 	this._states = new GameStatesBag();
 	this._playback = new Playback(this._states);
@@ -106,9 +107,12 @@ GameStream.prototype._pushUpdates = function() {
 
 GameStream.prototype._emitGameUpdates = function(gameUpdates) {
 	if (gameUpdates.length) {
-		var squashed = TimedUpdate.squash(gameUpdates);
-		this.emit('update', squashed.update);
-		this.emit('data',gameUpdates);
+		if (this.fullUpdates) {
+			this.emit('update', gameUpdates);
+		} else {
+			var squashed = TimedUpdate.squash(gameUpdates);
+			this.emit('update', squashed.update);
+		}
 		this.eachPipe(function(writable) {
 			writable.write(gameUpdates);
 		});
