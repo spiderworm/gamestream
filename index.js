@@ -1,7 +1,7 @@
 
 var GameStream = require('./GameStream.js');
-GameStream.Clients = require('./GameClients.js');
-GameStream.Socket = require('./GameSocket.js');
+GameStream.SocketServer = require('./SocketServer.js');
+GameStream.Socket = require('./Socket.js');
 GameStream.mergeStates = require('./mergeStates.js');
 
 module.exports = GameStream;
