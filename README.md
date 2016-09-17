@@ -5,7 +5,13 @@
 - Github: https://github.com/spiderworm/gamestream
 - NPM: https://www.npmjs.com/package/gamestream
 
-The goal of this project is to make it easy to stream state data from your JavaScript server to JavaScript clients, while still giving you full control over the stream.
+The goal of this project is to create a library to make it easy to stream state data from your JavaScript server to JavaScript clients, while still giving you full control over the stream.
+
+### Should I Use This?
+
+This library is in it's very infancy! History rewrites are a little sketchy and may not be implemented 100% correctly yet, nothing is unit-tested, and without a doubt you will run into memory issues with this library if your client and/or server is up and running too long! This library is a toy for now, but has potential to be useful down the road!
+
+Please favorite and watch this project so that you can be notified as I add features and fix serious issues... but for now know that you use this library at your own risk!
 
 ### Installation
 
