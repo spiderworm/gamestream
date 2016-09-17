@@ -1,5 +1,6 @@
 
 var GameState = require('./GameState.js');
+var statesUtil = require('./statesUtil.js');
 
 function GameStatesBag() {
 	this._states = [];
@@ -8,6 +9,9 @@ function GameStatesBag() {
 Object.defineProperty(GameStatesBag.prototype, 'length', {
 	get: function() { return this._states.length; }
 });
+
+GameStatesBag.INSERT = 'insert';
+GameStatesBag.MERGE = 'merge';
 
 GameStatesBag.prototype.get = function(index) {
 	return this._states[index];
@@ -40,14 +44,47 @@ GameStatesBag.prototype.insertLate = function(gameState) {
 	return this._insertAt(gameState, 0);
 };
 
+GameStatesBag.prototype.getAllAfter = function(startState, endTime) {
+	endTime = !isNaN(endTime) ? endTime : Infinity;
+	var states = [];
+	var i = this._states.indexOf(startState) + 1;
+	for (; i < this._states.length; i++) {
+		var testState = this._states[i];
+		if (testState.time > endTime) {
+			break;
+		}
+		states.push(testState);
+	}
+	return states;
+};
+
+GameStatesBag.prototype.getAllBefore = function(startState, endTime) {
+	endTime = !isNaN(endTime) ? endTime : -Infinity;
+	var states = [];
+	var i = this._states.indexOf(startState);
+	i = (i === -1 ? this._states.length - 1 : i) - 1;
+	for (; i > 0; i--) {
+		var testState = this._states[i];
+		if (testState.time < endTime) {
+			break;
+		}
+		states.push(testState);
+	}
+	return states;
+};
+
 GameStatesBag.prototype._insertAt = function(gameState, index) {
 	this._states.splice(index, 0, gameState);
 	this._computeStateValuesAt(index);
-	return gameState;
+	return new InsertResult(gameState);
 };
 
 GameStatesBag.prototype._updateAt = function(gameState, index) {
-	throw new Error('TODO: implement me');
+	var resultState = this._states[index];
+	resultState = statesUtil.merge([resultState, gameState]);
+	this._states[index] = resultState;
+	this._computeStateValuesAt(index);
+	return new MergeResult(resultState);
 };
 
 GameStatesBag.prototype._computeStateValuesAt = function(index) {
@@ -58,5 +95,20 @@ GameStatesBag.prototype._computeStateValuesAt = function(index) {
 		);
 	}
 };
+
+
+
+function InsertResult(gameState) {
+	this.state = gameState;
+}
+InsertResult.prototype.strategy = GameStatesBag.INSERT;
+
+function MergeResult(gameState) {
+	this.state = gameState;
+}
+MergeResult.prototype.strategy = GameStatesBag.MERGE;
+
+
+
 
 module.exports = GameStatesBag;

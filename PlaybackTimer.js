@@ -1,10 +1,12 @@
 
 var now = require('./now.js');
+var PlaybackLogger = require('./PlaybackLogger.js');
 
 function PlaybackTimer(playTime, realTime) {
 	this._lastPlayback = playTime;
 	this._lastReal = realTime;
 	this._speed = 0;
+	this._logs = new PlaybackLogger();
 }
 
 Object.defineProperty(PlaybackTimer.prototype, 'real', {
@@ -23,6 +25,7 @@ Object.defineProperty(PlaybackTimer.prototype, 'speed', {
 
 PlaybackTimer.prototype.setSpeed = function(speed) {
 	this._stablize();
+	this._logs.logPoint(this.real, this.playback, speed);
 	this._speed = speed;
 };
 
@@ -40,9 +43,16 @@ PlaybackTimer.prototype.getPlaybackTime = function(realTime) {
 	return this._lastPlayback + (this._speed * (realTime - this._lastReal));
 };
 
+PlaybackTimer.prototype.getPlaybackHistory = function(realTime) {
+	this._logs.setCurrentPoint(this.real, this.playback);
+	return this._logs.getPlaybackHistory(realTime);
+};
+
 PlaybackTimer.prototype.setPlaybackTime = function(playTime) {
+	this._logs.logPoint(this.real, this.playback, undefined);
 	this._lastReal = now();
 	this._lastPlayback = playTime;
+	this._logs.logPoint(this._lastReal, this._lastPlayback, this._speed);
 };
 
 PlaybackTimer.prototype._stablize = function() {

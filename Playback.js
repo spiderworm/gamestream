@@ -3,10 +3,13 @@ var now = require('./now.js');
 var OutputState = require('./OutputState.js');
 var PlaybackTimer = require('./PlaybackTimer.js');
 var GameState = require('./GameState.js');
+var statesUtil = require('./statesUtil.js');
+
 
 function Playback(gameStatesBag) {
 	this._states = gameStatesBag;
-	this._updateBuffer = [];
+	this._buffer = [];
+	this._history = {};
 	var time = now();
 	this._time = new PlaybackTimer(time, time);
 	this.setSpeed(1);
@@ -71,7 +74,7 @@ Playback.prototype.setSpeed = function(speed) {
 	this.bufferUpdates();
 	var update = new OutputState(now());
 	update.speed = speed;
-	this._updateBuffer.push(update);
+	this._buffer.push(update);
 	this._time.setSpeed(speed);
 };
 
@@ -87,58 +90,48 @@ Playback.prototype.bufferUpdates = function() {
 	if (this._time.speed === 0) {
 		return;
 	}
+	var reverse = this._time.speed < 0;
 	var endTime = this.getTime();
-	if (this._time.speed > 0) {
-		this._bufferForwards(this._lastBuffered, endTime);
+	var states;
+	if (!reverse) {
+		states = this._states.getAllAfter(this._lastBuffered, endTime);
 	} else {
-		this._bufferBackwards(this._lastBuffered, endTime);
+		states = this._states.getAllBefore(this._lastBuffered, endTime);
+	}
+	if (states.length > 0) {
+		this._bufferStates(states, reverse);
+		this._lastBuffered = states[states.length - 1];
+	}
+};
+
+Playback.prototype.bufferRewrites = function(state) {
+	var history = this._time.getPlaybackHistory(state.time);
+	if (history.length) {
+		var rewrites = history.map(function(point) {
+			return OutputState.fromGameState(point.time, state, point.speed < 0, true);
+		});
+		var currentState = this.getState();
+		last = currentState.values.retroactiveProp;
+		var fixedOutput = statesUtil.createUnrewritePatch(rewrites, currentState);
+		fixedOutput.time = this._time.getPlaybackTime(currentState.time);
+		rewrites.push(fixedOutput);
+		this._buffer = this._buffer.concat(rewrites);
 	}
 };
 
 Playback.prototype.flushUpdates = function() {
-	var updates = this._updateBuffer;
-	this._updateBuffer = [];
-	return updates;
+	var states = this._buffer;
+	this._buffer = [];
+	return states;
 };
 
-Playback.prototype._bufferForwards = function(gameState, endTime) {
-	var updates = [];
-	var lastBuffered;
-	for (var i=this._states.indexOf(gameState) + 1; i<this._states.length; i++) {
-		var testState = this._states.get(i);
-		if (testState.time > endTime) {
-			break;
-		}
-		updates.push(testState);
-	}
-	this._bufferUpdates(updates, false);
-};
-
-Playback.prototype._bufferBackwards = function(gameState, endTime) {
-	var updates = [];
-	var lastBuffered;
-	for (var i=this._states.indexOf(gameState) - 1; i>=0; i--) {
-		var testState = this._states.get(i);
-		if (testState.time < endTime) {
-			break;
-		}
-		updates.push(testState);
-	}
-	this._bufferUpdates(updates, true);
-};
-
-Playback.prototype._bufferUpdates = function(gameStates, reverse) {
-	if (gameStates.length) {
-		this._lastBuffered = gameStates[gameStates.length - 1];
-		var realTime = now();
-		this._updateBuffer = this._updateBuffer.concat(
-			gameStates.map(function(state) {
-				var time = this._time.getRealTime(state.time);
-				var outputState = OutputState.fromGameState(time, state, reverse);
-				return outputState;
-			}.bind(this))
-		);
-	}
+Playback.prototype._bufferStates = function(states, reverse) {
+	states = states.map(function(state) {
+		var time = this._time.getRealTime(state.time);
+		var outputState = OutputState.fromGameState(time, state, reverse);
+		return outputState;
+	}.bind(this));
+	this._buffer = this._buffer.concat(states);
 };
 
 module.exports = Playback;

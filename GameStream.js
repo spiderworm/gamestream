@@ -6,7 +6,7 @@ var GameState = require('./GameState.js');
 var GameStatesBag = require('./GameStatesBag.js');
 var addPipeBagTo = require('./addPipeBagTo.js');
 var Playback = require('./Playback.js');
-var mergeStates = require('./mergeStates.js');
+var statesUtil = require('./statesUtil.js');
 
 function GameStream(opts) {
 	if (!(this instanceof GameStream)) { return new GameStream(opts); }
@@ -66,7 +66,8 @@ GameStream.prototype.write = function(outputStates) {
 
 GameStream.prototype.updateAt = function(time, update) {
 	var state = new GameState(time, update);
-	this._states.insertLate(state);
+	var result = this._states.insertLate(state);
+	this._playback.bufferRewrites(result.state);
 };
 
 GameStream.prototype.updateNow = function(update) {
@@ -108,7 +109,7 @@ GameStream.prototype._emitGameUpdates = function(gameUpdates) {
 		if (this.fullDataMode) {
 			this.emit('full-data', gameUpdates);
 		} else {
-			this.emit('data', mergeStates(gameUpdates));
+			this.emit('data', statesUtil.merge(gameUpdates));
 		}
 		this.eachPipe(function(writable) {
 			writable.write(gameUpdates);
