@@ -1,6 +1,7 @@
 
 var GameStream = require('../');
-var now = require('../now');
+var now = require('../misc/now.js');
+var ConsoleLogger = require('../debug/ConsoleLogger.js');
 
 var timeLogs = [];
 
@@ -14,22 +15,16 @@ function updateState() {
 	stream1.updateNow({count: state.count});
 }
 
-function outputUpdate(data) {
-	if (data.update) {
-		var delay = now() - timeLogs[data.update.count];
-		console.info(
-			now() + ':',
-			'received update with a delay of ' + delay + ' ms:',
-			JSON.stringify(data.update)
-		);
-	}
-}
-
-var stream1 = new GameStream({
-	pushInterval: 100
+var logger = new ConsoleLogger({
+	getDelay: function(data, time) {
+		if (data.update) {
+			return now() - timeLogs[data.update.count];
+		}
+	},
+	logFull: true
 });
 
-setInterval(updateState, 1000);
+var stream1 = new GameStream();
 
 var stream2 = new GameStream({
 	lag: 10
@@ -40,4 +35,6 @@ var stream3 = new GameStream({
 	lag: 1000
 });
 stream2.pipe(stream3);
-stream3.on('data', outputUpdate);
+stream3.on('data', logger.log.bind(logger));
+
+setInterval(updateState, 1000);

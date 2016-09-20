@@ -1,9 +1,10 @@
 
-var addPipeBagTo = require('./addPipeBagTo.js');
+var PipeBag = require('../stream/PipeBag.js');
 var defaultSocketConfig = require('./defaultSocketConfig.js');
 
 function Socket(config) {
-	addPipeBagTo(this);
+	this._pipes = new PipeBag();
+	PipeBag.exposeInterface(this, this._pipes);
 
 	var host = config.host || defaultSocketConfig.host;
 	var port = config.port || defaultSocketConfig.port;

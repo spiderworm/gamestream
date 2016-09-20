@@ -1,6 +1,7 @@
 
 var GameStream = require('../');
-var now = require('../now');
+var now = require('../misc/now');
+var ConsoleLogger = require('../debug/ConsoleLogger.js');
 
 var UPDATE_INTERVAL_MS = 1000;
 var HISTORY_DELAY = 1500;
@@ -33,19 +34,10 @@ function changeHistory() {
 	);
 }
 
-function outputStates(data) {
-	if (data.update) {
-		console.info(
-			now() + ':',
-			'received update from ' + data.time + ':',
-			JSON.stringify(data.update)
-		);
-	}
-}
-
 var stream1 = new GameStream();
 
-stream1.on('data', outputStates);
+var logger = new ConsoleLogger();
+stream1.on('data',logger.log.bind(logger));
 
 setInterval(updateState, UPDATE_INTERVAL_MS);
 setInterval(changeHistory, UPDATE_INTERVAL_MS);

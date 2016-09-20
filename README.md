@@ -81,15 +81,17 @@ var clientSocket = new GameStream.Socket(socketConfig);
 clientSocket.pipe(clientStream);
 ```
 
-Amazing! Now as you push data into the serverStream...
+Now as you push data into the serverStream...
+
 ```javascript
-count = 0;
+var count = 0;
 setInterval(function() {
     count++;
     serverStream.updateNow({ count: count });
 }, 100);
 ```
-... the client will automatically receive them!
+
+... the client will automatically receive them! Amazing!
 
 ##### Synchronization
 One of the trickier things to deal with in multi-user experiences is to deal with late input. Your server may send out state information to clients but later (after receiving information from a laggy player) need to revise some part of the state. GameStream has a number of features to help with that problem!

@@ -1,7 +1,6 @@
 
 function PlaybackLogger() {
 	this._points = [];
-	this.current = {};
 }
 
 PlaybackLogger.prototype.logPoint = function(realTime, playTime, speed) {
@@ -23,7 +22,9 @@ PlaybackLogger.prototype.getPlaybackHistory = function(realTime) {
 	var results = [];
 	var previous;
 	var points = [].concat(this._points);
-	points.push(this._current);
+	if (this._current) {
+		points.push(this._current);
+	}
 	points.forEach(function(next) {
 		if (previous) {
 			if (previous.speed === 0 && previous.realTime === realTime) {

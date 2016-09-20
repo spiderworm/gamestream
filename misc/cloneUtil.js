@@ -29,15 +29,17 @@ function cloneAssign(target) {
 function cloneNarrow(target) {
 	var modifiers = Array.prototype.slice.call(arguments, 1);
 	modifiers.forEach(function(source) {
-		for (var i in target) {
-			if (isObject(source[i])) {
-				if (!isObject(target[i])) {
-					target[i] = clone(source[i]);
+		if (source) {
+			for (var i in target) {
+				if (isObject(source[i])) {
+					if (!isObject(target[i])) {
+						target[i] = clone(source[i]);
+					} else {
+						cloneNarrow(target[i], source[i])
+					}
 				} else {
-					cloneNarrow(target[i], source[i])
+					target[i] = source[i];
 				}
-			} else {
-				target[i] = source[i];
 			}
 		}
 	});

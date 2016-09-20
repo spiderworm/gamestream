@@ -1,6 +1,6 @@
 
 var OutputState = require('./OutputState.js');
-var cloneUtil = require('./cloneUtil.js');
+var cloneUtil = require('../misc/cloneUtil.js');
 
 function timeSort(states) {
 	return states.sort(function(a, b) {
@@ -22,9 +22,10 @@ function mergeStates(states) {
 
 function createUnrewritePatch(rewrites, state) {
 	var output = new OutputState();
-	var buildTreeArgs = [{}].concat(rewrites.map(function(o) { return o.rewrite; }));
+	var buildTreeArgs = [{}].concat(rewrites.map(function(o) { return o.update; }));
 	output.update = cloneUtil.buildTree.apply(null, buildTreeArgs);
 	output.update = cloneUtil.cloneNarrow(output.update, state.values);
+	output.rewrite = true;
 	return output;
 }
 

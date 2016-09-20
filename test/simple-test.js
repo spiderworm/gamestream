@@ -1,12 +1,11 @@
 
 var GameStream = require('../');
-var now = require('../now');
+var now = require('../misc/now.js');
+var ConsoleLogger = require('../debug/ConsoleLogger.js');
 
 var PUSH_INTERVAL_MS = 0;
 var LAG_MS = 10;
 var UPDATE_INTERVAL_MS = 200;
-
-
 
 var timeLogs = [];
 
@@ -26,24 +25,18 @@ function updateState() {
 	stream1.updateNow(state);
 }
 
-function outputState(data) {
-	if (data.update) {
-		var delay = now() - timeLogs[data.update.count];
-		console.info(
-			now() + ':',
-			'received update with a delay of ' + delay + ' ms',
-			'and the temp property',
-			(data.update.hasOwnProperty('temp') ? 'was' : 'WAS NOT (uh oh)'),
-			'preserved'
-		);
-	}
-}
-
 var stream1 = new GameStream({
 	pushInterval: PUSH_INTERVAL_MS,
 	lag: LAG_MS
 });
 
-stream1.on('data', outputState);
+var logger = new ConsoleLogger({
+	getDelay: function(data, time) {
+		if (data.update) {
+			return now() - timeLogs[data.update.count];
+		}
+	}
+});
+stream1.pipe(logger);
 
 setInterval(updateState, UPDATE_INTERVAL_MS);

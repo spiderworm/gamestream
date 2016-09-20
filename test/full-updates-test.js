@@ -1,6 +1,7 @@
 
 var GameStream = require('../');
-var now = require('../now');
+var now = require('../misc/now.js');
+var ConsoleLogger = require('../debug/ConsoleLogger.js');
 
 var UPDATE_INTERVAL_MS = 50;
 var PUSH_INTERVAL_MS = 200;
@@ -17,34 +18,20 @@ function updateState() {
 	stream1.updateNow(state);
 }
 
-function outputUpdates(updates) {
-	console.info('-------- received set of updates ----------');
-	console.info('merged: ', GameStream.mergeStates(updates));
-	var time = now();
-	updates.forEach(function(data) {
-		if (data.speed !== undefined) {
-			console.info(
-				time + ':',
-				'speed update:', JSON.stringify(data)
-			);
-		}
+var logger = new ConsoleLogger({
+	getDelay: function(data, time) {
 		if (data.update) {
-			var delay = time - timeLogs[data.update.count];
-			console.info(
-				time + ':',
-				'received update with a delay of ' + delay + ' ms:',
-				JSON.stringify(data)
-			);
+			return now() - timeLogs[data.update.count];
 		}
-	});
-}
+	}
+});
 
 var stream1 = new GameStream({
 	fullDataMode: true,
 	pushInterval: PUSH_INTERVAL_MS
 });
 
-stream1.on('full-data', outputUpdates);
+stream1.on('full-data', logger.log.bind(logger));
 stream1.on('data', function() { throw new Error('should not be getting merged update when in full data mode'); });
 
 setInterval(updateState, UPDATE_INTERVAL_MS);

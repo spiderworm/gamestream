@@ -1,11 +1,10 @@
 
 var GameStream = require('../');
-var now = require('../now.js');
+var now = require('../misc/now.js');
+var ConsoleLogger = require('../debug/ConsoleLogger.js');
 
-var UPDATE_INTERVAL_MS = 50;
+var UPDATE_INTERVAL_MS = 500;
 var CONTROLS_SWITCH_INTERVAL_MS = 1000;
-
-
 
 var timeLogs = [];
 
@@ -19,29 +18,23 @@ function updateState() {
 	stream1.updateNow(state);
 }
 
-function outputUpdate(data) {
-	if (data.speed !== undefined) {
-		console.info('speed update:',data.speed);
-	}
-	if (data.update) {
-		var delay = now() - timeLogs[data.update.count];
-		console.info(
-			now() + ':',
-			'received update with a delay of ' + delay + ' ms:',
-			JSON.stringify(data.update)
-		);
-	}
-}
+var logger = new ConsoleLogger({
+	getDelay: function(data, time) {
+		if (data.update) {
+			return now() - timeLogs[data.update.count];
+		}
+	},
+	logFull: true
+});
 
 var stream1 = new GameStream();
 
 var stream2 = new GameStream();
-stream2.on('data', outputUpdate);
 stream1.pipe(stream2);
 
+stream2.on('data', logger.log.bind(logger));
+
 setInterval(updateState, UPDATE_INTERVAL_MS);
-
-
 
 function play() {
 	console.info('-- playing normal speed');
@@ -63,7 +56,7 @@ function rewind() {
 
 function fastForward() {
 	console.info('-- fast forwarding');
-	stream1.fastForward(1.5);
+	stream1.fastForward(3.5);
 	setTimeout(play, CONTROLS_SWITCH_INTERVAL_MS);
 }
 

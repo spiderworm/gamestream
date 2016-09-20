@@ -1,17 +1,20 @@
 
-var cloneUtil = require('./cloneUtil.js');
+var cloneUtil = require('../misc/cloneUtil.js');
+var objectFactory = require('../misc/objectFactory.js');
 
 function GameState(time, updateValues) {
-	updateValues = cloneUtil.clone(updateValues);
+	updateValues = objectFactory.clone(updateValues);
 	this.time = time;
 	this.update = updateValues;
 	this.values = updateValues;
 	this.reverseUpdate = {};
 }
 
-GameState.fromOutputState = function(ouputState) {
-	var state = new GameState(ouputState.time, ouputState.update);
-	state.speed = ouputState.speed;
+GameState.fromOutputState = function(outputState) {
+	var state = new GameState(outputState.time, outputState.update);
+	if (outputState.speed || outputState.speed === 0) {
+		state.speed = outputState.speed;
+	}
 	return state;
 };
 

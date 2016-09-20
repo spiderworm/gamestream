@@ -1,40 +1,54 @@
 
 var Stream = require('stream');
 var inherits = require('inherits');
-var now = require('./now.js');
-var GameState = require('./GameState.js');
-var GameStatesBag = require('./GameStatesBag.js');
-var addPipeBagTo = require('./addPipeBagTo.js');
-var Playback = require('./Playback.js');
-var statesUtil = require('./statesUtil.js');
+var now = require('./misc/now.js');
+var PipeBag = require('./stream/PipeBag.js');
+var PlaybackControls = require('./playback/PlaybackControls.js');
+var statesUtil = require('./states/statesUtil.js');
+var CustomWritable = require('./stream/CustomWritable.js');
+var Config = require('./misc/Config.js');
 
-function GameStream(opts) {
-	if (!(this instanceof GameStream)) { return new GameStream(opts); }
-	opts = opts || {};
+var defaultConfig = new Config({
+	push: true,
+	pushInterval: 0,
+	lag: 0,
+	fullDataMode: false,
+});
 
-	this.push = opts.push !== undefined ? opts.push : true;
-	this.pushInterval = opts.pushInterval || 0;
-	this.lag = opts.lag || 0;
-	this.fullDataMode = !!opts.fullDataMode;
+function GameStream(config) {
+	if (!(this instanceof GameStream)) {
+		return new GameStream(config);
+	}
 
-	this._states = new GameStatesBag();
-	this._playback = new Playback(this._states);
+	this._pipes = new PipeBag();
+	PipeBag.exposeInterface(this, this._pipes);
+
+	config = new Config(defaultConfig, [config]);
+	Config.apply(config, this);
+
+	this._playback = new PlaybackControls();
 	this._playback.setTime(now() - this.lag);
-	Playback.exposeInterface(this, this._playback);
+	PlaybackControls.exposeInterface(this, this._playback);
 
-	addPipeBagTo(this);
+	this._emitter = new CustomWritable(this._emitGameUpdates.bind(this));
+	this._playback.pipe(this._emitter);
 
 	Stream.call(this, { objectMode: true });
 }
 
 inherits(GameStream, Stream);
 
-Object.defineProperty(GameStream.prototype, 'pushInterval', {
-	get: function() { return this._pushInterval; },
+Object.defineProperty(GameStream.prototype, 'state', {
+	get: function() { return this.getState(); },
+	set: function(stateValues) { this.setStateAt(this.getTime(), stateValues); }
+});
+
+Object.defineProperty(GameStream.prototype, 'fullDataMode', {
+	get: function() { return this._fullDataMode; },
 	set: function(val) {
-		val = val > 0 ? val : 0;
-		if (val !== this._pushInterval) {
-			this._pushInterval = val;
+		val = !!val;
+		if (val !== this._fullDataMode) {
+			this._fullDataMode = val;
 			this._updatePushing();
 		}
 	}
@@ -51,23 +65,24 @@ Object.defineProperty(GameStream.prototype, 'push', {
 	}
 });
 
-Object.defineProperty(GameStream.prototype, 'state', {
-	get: function() { return this.getState(); },
-	set: function(stateValues) { this.setStateAt(this.getTime(), stateValues); }
+Object.defineProperty(GameStream.prototype, 'pushInterval', {
+	get: function() { return this._pushInterval; },
+	set: function(val) {
+		val = val > 0 ? val : 0;
+		if (val !== this._pushInterval) {
+			this._pushInterval = val;
+			this._updatePushing();
+		}
+	}
 });
 
 GameStream.prototype.write = function(outputStates) {
-	outputStates.forEach(function(ouputState) {
-		var state = GameState.fromOutputState(ouputState);
-		this._states.insertLate(state);
-	}.bind(this));
+	this._playback.write(outputStates);
 	return true;
 };
 
 GameStream.prototype.updateAt = function(time, update) {
-	var state = new GameState(time, update);
-	var result = this._states.insertLate(state);
-	this._playback.bufferRewrites(result.state);
+	this._playback.write([{time: time, update: update}]);
 };
 
 GameStream.prototype.updateNow = function(update) {
@@ -82,7 +97,7 @@ GameStream.prototype.setStateAt = function(time, values) {
 
 GameStream.prototype.getState = function() {
 	var gameState = this._playback.getState();
-	return gameState ? gameState.values : undefined;
+	return gameState || undefined;
 };
 
 GameStream.prototype._updatePushing = function() {
@@ -90,28 +105,35 @@ GameStream.prototype._updatePushing = function() {
 		clearInterval(this._pushIntervalID);
 		delete this._pushIntervalID;
 	}
+	if (this._eventPushStream) {
+		this._pipes.unpipe(this._eventPushStream);
+		delete this._eventPushStream;
+	}
 	if (this._push) {
 		this._pushIntervalID = setInterval(
 			this._pushUpdates.bind(this),
 			this._pushInterval
 		);
+		if (this._fullDataMode) {
+			this._eventPushStream = new CustomWritable(function(states) {
+				this.emit('full-data', states);
+			}.bind(this));
+		} else {
+			this._eventPushStream = new CustomWritable(function(states) {
+				this.emit('data', statesUtil.merge(states));
+			}.bind(this));
+		}
+		this._pipes.pipe(this._eventPushStream);
 	}
 };
 
 GameStream.prototype._pushUpdates = function() {
-	this._playback.bufferUpdates();
-	var updates = this._playback.flushUpdates();
-	this._emitGameUpdates(updates);
+	this._playback.update();
 };
 
 GameStream.prototype._emitGameUpdates = function(gameUpdates) {
 	if (gameUpdates.length) {
-		if (this.fullDataMode) {
-			this.emit('full-data', gameUpdates);
-		} else {
-			this.emit('data', statesUtil.merge(gameUpdates));
-		}
-		this.eachPipe(function(writable) {
+		this._pipes.forEach(function(writable) {
 			writable.write(gameUpdates);
 		});
 	}

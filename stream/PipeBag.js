@@ -1,9 +1,18 @@
 
-var Pipe = require('./GamePipe');
+var Pipe = require('./Pipe.js');
 
 function PipeBag() {
 	this._pipes = [];	
 }
+
+PipeBag.exposeInterface = function(target, pipeBag) {
+	var methods = [
+		'pipe', 'unpipe'
+	];
+	methods.forEach(function(name) {
+		target[name] = pipeBag[name].bind(pipeBag);
+	});
+};
 
 PipeBag.prototype.pipe = function(writable) {
 	var pipe = new Pipe(writable);
@@ -21,16 +30,10 @@ PipeBag.prototype.unpipe = function(writable) {
 	}
 };
 
-PipeBag.prototype.eachPipe = function(callback) {
+PipeBag.prototype.forEach = function(callback) {
 	this._pipes.forEach(function(pipe, i) {
 		callback(pipe.writable, i);
 	});
 };
 
-function addPipeBagTo(obj) {
-	Object.assign(obj, PipeBag.prototype);
-	PipeBag.apply(obj);
-	return obj;
-};
-
-module.exports = addPipeBagTo;
+module.exports = PipeBag;

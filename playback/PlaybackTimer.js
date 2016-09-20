@@ -1,11 +1,11 @@
 
-var now = require('./now.js');
+var now = require('../misc/now.js');
 var PlaybackLogger = require('./PlaybackLogger.js');
 
 function PlaybackTimer(playTime, realTime) {
 	this._lastPlayback = playTime;
 	this._lastReal = realTime;
-	this._speed = 0;
+	this._speed = 1;
 	this._logs = new PlaybackLogger();
 }
 
@@ -43,8 +43,11 @@ PlaybackTimer.prototype.getPlaybackTime = function(realTime) {
 	return this._lastPlayback + (this._speed * (realTime - this._lastReal));
 };
 
-PlaybackTimer.prototype.getPlaybackHistory = function(realTime) {
+PlaybackTimer.prototype.advancePointer = function() {
 	this._logs.setCurrentPoint(this.real, this.playback);
+};
+
+PlaybackTimer.prototype.getPlaybackHistory = function(realTime) {
 	return this._logs.getPlaybackHistory(realTime);
 };
 

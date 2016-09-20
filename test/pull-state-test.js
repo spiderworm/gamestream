@@ -1,6 +1,7 @@
 
 var GameStream = require('../');
-var now = require('../now');
+var now = require('../misc/now.js');
+var ConsoleLogger = require('../debug/ConsoleLogger.js');
 
 var UPDATE_INTERVAL_MS = 1000;
 var PULL_INTERVAL_MS = 500;
@@ -13,6 +14,9 @@ var stream1 = new GameStream({
 	push: false
 });
 
+var logger = new ConsoleLogger();
+stream1.on('data', outputState);
+
 function updateState() {
 	state.count++;
 	stream1.updateNow(state);
@@ -20,7 +24,9 @@ function updateState() {
 
 function outputState() {
 	var state = stream1.state;
-	console.info('pulled state:', JSON.stringify(state));
+	if (state) {
+		logger.log(state);
+	}
 }
 
 stream1.on('data', function() { throw new Error('data should not be getting pushed out'); });
