@@ -9,13 +9,15 @@ The goal of this project is to create a library to make it easy to stream state 
 
 ### Should I Use This?
 
-This library is in it's very infancy! History rewrites are a little sketchy and may not be implemented 100% correctly yet, nothing is unit-tested, and without a doubt you will run into memory issues with this library if your client and/or server is up and running too long! This library is a toy for now, but has potential to be useful down the road!
+This library is in it's very infancy! Really, I'm less than 50 commits into this thing. It does seem to work, however, and it's making my game dev projects easier, and I think it might help you too!
 
-Please favorite and watch this project so that you can be notified as I add features and fix serious issues... but for now know that you use this library at your own risk!
+### How Can I Help?
+
+Please favorite and watch this project so that you can be notified as I add features and fix serious issues. Please provide feedback, both positive and negative, in the GitHub issues tab so I can know where to improve it and where it already shines!
 
 ### Installation
 
-The simplest installtion will come by using npm.
+The simplest installation is by using npm.
 
 ```bash
 npm install gamestream
@@ -160,7 +162,8 @@ Pausing, rewinding, and fast-forwarding states is a non-trivial operation in cas
 - push (default true) - When false, do not push updates to downstream listeners. Otherwise, do push updates.
 - pushInterval (default 0) - When zero, send data to downstream listeners immediately. When non-zero, queue updates and push those on the interval
 - lag (default 0) - Push updates to listeners after the specified delay. Pausing, rewinding, and fast-forwarding the stream will nullify the effect of this property.
-- state - The current total state that the GameStream knows of at the current playback time (please note, the current playback time may differ from the actual time).
+- state - The current total state that the GameStream knows of at the current playback time (please note, the current playback time may differ from the actual machine time).
+- maxStorage (default 1000) - The max number of states you wish the library to store. Please keep in mind that lower values, while less memory intensive, can create issues with replaying state or rewriting history.
 
 ##### Methods
 - write(streamData) - Useful for building custom pipes. A required method for NodeJS writeable pipes.
