@@ -6,13 +6,19 @@ var GameState = require('../states/GameState.js');
 var statesUtil = require('../states/statesUtil.js');
 
 function StatesStorage() {
-	this._pipes = new PipeBag();
+	this._maxStorage = Infinity;
+	this._pipes = new PipeBag(this);
 	PipeBag.exposeInterface(this, this._pipes);
 	this._states = [];
 	Stream.call(this, { objectMode: true });
 }
 
 inherits(StatesStorage, Stream);
+
+Object.defineProperty(StatesStorage.prototype, 'maxStorage', {
+	get: function() { return this._maxStorage; },
+	set: function(v) { this.setmaxStorage(v); }
+});
 
 StatesStorage.prototype.write = function(rawStates) {
 	var states = rawStates.map(function(raw) {
@@ -23,6 +29,12 @@ StatesStorage.prototype.write = function(rawStates) {
 		writable.write(states);
 	});
 	return true;
+};
+
+StatesStorage.prototype.setmaxStorage = function(max) {
+	if (this._maxStorage !== max) {
+		this._maxStorage = max;
+	}
 };
 
 StatesStorage.prototype.get = function(index) {
@@ -92,6 +104,7 @@ StatesStorage.prototype._handleWriteData = function(data) {
 StatesStorage.prototype._insertAt = function(state, index) {
 	this._states.splice(index, 0, state);
 	this._computeStateValuesAt(index);
+	this._trim();
 };
 
 StatesStorage.prototype._updateAt = function(gameState, index) {
@@ -108,6 +121,12 @@ StatesStorage.prototype._computeStateValuesAt = function(index) {
 			this._states[i],
 			i > 0 ? this._states[i - 1] : null
 		);
+	}
+};
+
+StatesStorage.prototype._trim = function() {
+	if (this._states.length > this._maxStorage) {
+		this._states.splice(0, this._states.length - this._maxStorage);
 	}
 };
 

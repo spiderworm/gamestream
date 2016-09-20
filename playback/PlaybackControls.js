@@ -6,20 +6,20 @@ var OutputState = require('../states/OutputState.js');
 var RewriteOutputState = require('../states/RewriteOutputState.js');
 var PlaybackTimer = require('./PlaybackTimer.js');
 var statesUtil = require('../states/statesUtil.js');
-var StatesStorage = require('../storage/StatesStorage.js');
 var PipeBag = require('../stream/PipeBag.js');
 var CustomWritable = require('../stream/CustomWritable.js');
 
 function PlaybackControls() {
-	this._pipes = new PipeBag();
+	this._pipes = new PipeBag(this);
 	PipeBag.exposeInterface(this, this._pipes);
 	this._buffer = [];
 	var time = now();
 	this._time = new PlaybackTimer(time, time);
-	this._states = new StatesStorage();
-	this._rewritesPipe = new CustomWritable(this._bufferRewrites.bind(this));
-	this._states.pipe(this._rewritesPipe);
 	Stream.call(this, { objectMode: true });
+
+	this.on('pipe',function(statesStorage) {
+		this._states = statesStorage;
+	}.bind(this));
 }
 
 inherits(PlaybackControls, Stream);
@@ -52,7 +52,7 @@ Object.defineProperty(PlaybackControls.prototype, 'time', {
 });
 
 PlaybackControls.prototype.write = function(data) {
-	return this._states.write(data);
+	return this._bufferRewrites(data);
 };
 
 PlaybackControls.prototype.getState = function() {
@@ -100,7 +100,10 @@ PlaybackControls.prototype.setTime = function(time) {
 	this._time.setPlaybackTime(time);
 };
 
-PlaybackControls.prototype.update = function() {
+PlaybackControls.prototype.tick = function() {
+	if (!this._states) {
+		return;
+	}
 	this._bufferUpdates();
 	var updates = this._flushUpdates();
 	this._pipes.forEach(function(writable) {
@@ -141,11 +144,12 @@ PlaybackControls.prototype._bufferRewrites = function(states) {
 				return RewriteOutputState.fromState(state, point.time, point.speed < 0);
 			});
 			var currentState = this.getState();
-			last = currentState.values.retroactiveProp;
-			var fixedOutput = statesUtil.createUnrewritePatch(rewrites, currentState);
-			fixedOutput.time = this._time.getPlaybackTime(currentState.time);
-			rewrites.push(fixedOutput);
-			this._buffer = this._buffer.concat(rewrites);
+			if (currentState) {
+				var fixedOutput = statesUtil.createUnrewritePatch(rewrites, currentState);
+				fixedOutput.time = this._time.getPlaybackTime(currentState.time);
+				rewrites.push(fixedOutput);
+				this._buffer = this._buffer.concat(rewrites);
+			}
 		}
 	}.bind(this));
 };

@@ -34,7 +34,9 @@ function changeHistory() {
 	);
 }
 
-var stream1 = new GameStream();
+var stream1 = new GameStream({
+	maxStorage: 10
+});
 
 var logger = new ConsoleLogger({
 	logRewrite: true,

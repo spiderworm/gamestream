@@ -7,12 +7,14 @@ var PlaybackControls = require('./playback/PlaybackControls.js');
 var statesUtil = require('./states/statesUtil.js');
 var CustomWritable = require('./stream/CustomWritable.js');
 var Config = require('./misc/Config.js');
+var StatesStorage = require('./storage/StatesStorage.js');
 
 var defaultConfig = new Config({
 	push: true,
 	pushInterval: 0,
 	lag: 0,
 	fullDataMode: false,
+	maxStorage: 1000
 });
 
 function GameStream(config) {
@@ -20,20 +22,25 @@ function GameStream(config) {
 		return new GameStream(config);
 	}
 
-	this._pipes = new PipeBag();
+	Stream.call(this, { objectMode: true });
+
+	this._pipes = new PipeBag(this);
 	PipeBag.exposeInterface(this, this._pipes);
+
+	this._states = new StatesStorage();
+
+	this._playback = new PlaybackControls();
+	PlaybackControls.exposeInterface(this, this._playback);
+
+	this._emitter = new CustomWritable(this._emitGameUpdates.bind(this));
+
+	this._states.pipe(this._playback);
+	this._playback.pipe(this._emitter);
 
 	config = new Config(defaultConfig, [config]);
 	Config.apply(config, this);
 
-	this._playback = new PlaybackControls();
 	this._playback.setTime(now() - this.lag);
-	PlaybackControls.exposeInterface(this, this._playback);
-
-	this._emitter = new CustomWritable(this._emitGameUpdates.bind(this));
-	this._playback.pipe(this._emitter);
-
-	Stream.call(this, { objectMode: true });
 }
 
 inherits(GameStream, Stream);
@@ -76,13 +83,18 @@ Object.defineProperty(GameStream.prototype, 'pushInterval', {
 	}
 });
 
+Object.defineProperty(GameStream.prototype, 'maxStorage', {
+	get: function() { return this._states.maxStorage; },
+	set: function(v) { this._states.maxStorage = v; }
+});
+
 GameStream.prototype.write = function(outputStates) {
-	this._playback.write(outputStates);
+	this._states.write(outputStates);
 	return true;
 };
 
 GameStream.prototype.updateAt = function(time, update) {
-	this._playback.write([{time: time, update: update}]);
+	this._states.write([{time: time, update: update}]);
 };
 
 GameStream.prototype.updateNow = function(update) {
@@ -100,6 +112,10 @@ GameStream.prototype.getState = function() {
 	return gameState || undefined;
 };
 
+GameStream.prototype.tick = function() {
+	this._playback.tick();
+};
+
 GameStream.prototype._updatePushing = function() {
 	if (this._pushIntervalID) {
 		clearInterval(this._pushIntervalID);
@@ -111,7 +127,7 @@ GameStream.prototype._updatePushing = function() {
 	}
 	if (this._push) {
 		this._pushIntervalID = setInterval(
-			this._pushUpdates.bind(this),
+			this.tick.bind(this),
 			this._pushInterval
 		);
 		if (this._fullDataMode) {
@@ -125,10 +141,6 @@ GameStream.prototype._updatePushing = function() {
 		}
 		this._pipes.pipe(this._eventPushStream);
 	}
-};
-
-GameStream.prototype._pushUpdates = function() {
-	this._playback.update();
 };
 
 GameStream.prototype._emitGameUpdates = function(gameUpdates) {
