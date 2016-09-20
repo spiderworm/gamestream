@@ -1,5 +1,4 @@
 
-var cloneUtil = require('../misc/cloneUtil.js');
 var objectFactory = require('../misc/objectFactory.js');
 
 function GameState(time, updateValues) {
@@ -25,13 +24,13 @@ GameState.setPreviousState = function(targetState, previousState) {
 };
 
 GameState._computeValues = function(targetState, previousStateValues) {
-	var values = cloneUtil.clone(previousStateValues, targetState.update);
+	var values = objectFactory.clone(previousStateValues, [targetState.update]);
 	targetState.values = values;
 };
 
 GameState._computeReverseUpdate = function(targetState, previousStateValues) {
-	var reverseUpdate = cloneUtil.clone(targetState.update);
-	cloneUtil.cloneNarrow(reverseUpdate, previousStateValues);
+	var reverseUpdate = objectFactory.clone(targetState.update);
+	reverseUpdate = objectFactory.cloneNarrow(reverseUpdate, [previousStateValues]);
 	targetState.reverseUpdate = reverseUpdate;
 };
 

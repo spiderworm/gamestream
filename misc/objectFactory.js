@@ -19,7 +19,7 @@ function ObjectFactory(config) {
 			return target;
 		}
 		if (config.clone === true) {
-			if (config.cloneDeep === true) {
+			if (config.deep === true) {
 				target = this.clone(target);
 			} else {
 				target = this.assign({}, target);

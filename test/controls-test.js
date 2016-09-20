@@ -4,7 +4,7 @@ var now = require('../misc/now.js');
 var ConsoleLogger = require('../debug/ConsoleLogger.js');
 
 var UPDATE_INTERVAL_MS = 500;
-var CONTROLS_SWITCH_INTERVAL_MS = 1000;
+var CONTROLS_SWITCH_INTERVAL_MS = 5000;
 
 var timeLogs = [];
 

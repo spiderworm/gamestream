@@ -4,7 +4,7 @@ var now = require('../misc/now');
 var ConsoleLogger = require('../debug/ConsoleLogger.js');
 
 var UPDATE_INTERVAL_MS = 1000;
-var HISTORY_DELAY = 1500;
+var HISTORY_DELAY = 3500;
 
 var timeLogs = [];
 
@@ -36,7 +36,10 @@ function changeHistory() {
 
 var stream1 = new GameStream();
 
-var logger = new ConsoleLogger();
+var logger = new ConsoleLogger({
+	logRewrite: true,
+	logFull: false
+});
 stream1.on('data',logger.log.bind(logger));
 
 setInterval(updateState, UPDATE_INTERVAL_MS);

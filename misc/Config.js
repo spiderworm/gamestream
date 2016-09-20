@@ -1,5 +1,4 @@
 
-var cloneUtil = require('./cloneUtil.js');
 var objectFactory = require('./objectFactory.js');
 
 var assignNarrow = objectFactory.createFactory({
