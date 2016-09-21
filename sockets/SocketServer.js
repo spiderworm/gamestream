@@ -3,11 +3,11 @@ var Stream = require('stream');
 var inherits = require('inherits');
 var WebSocketServer = require('ws').Server;
 var defaultSocketConfig = require('./defaultSocketConfig.js');
+var Config = require('../misc/Config.js');
 
 function SocketServer(config) {
-	config = config || {};
-	var port = config.port || defaultSocketConfig.port;
-	this.socketServer = new WebSocketServer({ port: port });
+	config = new Config(defaultSocketConfig, [config]);
+	this.socketServer = new WebSocketServer({ port: config.port });
 	Stream.call(this, { objectMode: true });
 }
 

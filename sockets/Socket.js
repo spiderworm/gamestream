@@ -1,20 +1,18 @@
 
 var PipeBag = require('../stream/PipeBag.js');
 var defaultSocketConfig = require('./defaultSocketConfig.js');
+var Config = require('../misc/Config.js');
 
 function Socket(config) {
 	this._pipes = new PipeBag();
 	PipeBag.exposeInterface(this, this._pipes);
-
-	var host = config.host || defaultSocketConfig.host;
-	var port = config.port || defaultSocketConfig.port;
-	var path = config.path || defaultSocketConfig.path;
-	var url = 'ws://' + host + ':' + port + path;
+	config = new Config(defaultSocketConfig, [config]);
+	var url = 'ws://' + config.host + ':' + config.port + config.path;
 
 	var ws = new WebSocket(url);
 	ws.addEventListener('message', function(raw) {
 		var msg = JSON.parse(raw.data);
-		this.eachPipe(function(writable) {
+		this._pipes.forEach(function(writable) {
 			writable.write(msg);
 		});
 	}.bind(this));
