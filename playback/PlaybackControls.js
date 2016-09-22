@@ -4,21 +4,23 @@ var inherits = require('inherits');
 var now = require('../misc/now.js');
 var OutputState = require('../states/OutputState.js');
 var RewriteOutputState = require('../states/RewriteOutputState.js');
-var PlaybackTimer = require('./PlaybackTimer.js');
+var PlaybackPointer = require('./PlaybackPointer.js');
 var statesUtil = require('../states/statesUtil.js');
 var PipeBag = require('../stream/PipeBag.js');
 var CustomWritable = require('../stream/CustomWritable.js');
 
 function PlaybackControls() {
-	this._pipes = new PipeBag(this);
-	PipeBag.exposeInterface(this, this._pipes);
-	this._buffer = [];
-	var time = now();
-	this._time = new PlaybackTimer(time, time);
 	Stream.call(this, { objectMode: true });
 
-	this.on('pipe',function(statesStorage) {
-		this._states = statesStorage;
+	this._buffer = [];
+
+	this._pointer = new PlaybackPointer();
+
+	this._pipes = new PipeBag(this);
+	PipeBag.exposeInterface(this, this._pipes);
+
+	this.on('pipe', function(statesStorage) {
+		this._pointer.setStatesStore(statesStorage._timeStore);
 	}.bind(this));
 }
 
@@ -42,13 +44,13 @@ PlaybackControls.exposeInterface = function(target, playback) {
 };
 
 Object.defineProperty(PlaybackControls.prototype, 'speed', {
-	get: function() { return this._time.speed; },
+	get: function() { return this._pointer.speed; },
 	set: function(speed) { this.setSpeed(speed); }
 });
 
 Object.defineProperty(PlaybackControls.prototype, 'time', {
-	get: function() { return this._time.playback; },
-	set: function(time) { this._time.playback = time; }
+	get: function() { return this._pointer.time; },
+	set: function(time) { this._pointer.time = time; }
 });
 
 PlaybackControls.prototype.write = function(data) {
@@ -56,7 +58,7 @@ PlaybackControls.prototype.write = function(data) {
 };
 
 PlaybackControls.prototype.getState = function() {
-	return this._states.getStateAtTime(this.getTime());
+	return this._pointer.getCurrentState();
 };
 
 PlaybackControls.prototype.play = function() {
@@ -83,25 +85,25 @@ PlaybackControls.prototype.rewind = function(speed) {
 };
 
 PlaybackControls.prototype.setSpeed = function(speed) {
-	if (speed !== this._time.speed) {
+	if (speed !== this._pointer.speed) {
 		this._bufferUpdates();
 		var update = new OutputState(now());
 		update.speed = speed;
 		this._buffer.push(update);
-		this._time.setSpeed(speed);
+		this._pointer.setSpeed(speed);
 	}
 };
 
 PlaybackControls.prototype.getTime = function() {
-	return this._time.playback;
+	return this._pointer.time;
 };
 
 PlaybackControls.prototype.setTime = function(time) {
-	this._time.setPlaybackTime(time);
+	this._pointer.time = time;
 };
 
 PlaybackControls.prototype.tick = function() {
-	if (!this._states) {
+	if (!this._pointer) {
 		return;
 	}
 	this._bufferUpdates();
@@ -112,12 +114,12 @@ PlaybackControls.prototype.tick = function() {
 };
 
 PlaybackControls.prototype._bufferUpdates = function() {
-	if (this._time.speed === 0) {
+	if (this._pointer.speed === 0) {
 		return;
 	}
-	var states = this._advancePointer();
+	var states = this._pointer.advance();
 	if (states.length > 0) {
-		var reverse = this._time.speed < 0;
+		var reverse = this._pointer.speed < 0;
 		if (reverse) {
 			states = states.map(function(state) {
 				return state.next;
@@ -125,22 +127,6 @@ PlaybackControls.prototype._bufferUpdates = function() {
 		}
 		this._bufferStates(states, reverse);
 	}
-};
-
-PlaybackControls.prototype._advancePointer = function() {
-	this._time.advancePointer();
-	var reverse = this._time.speed < 0;
-	var endTime = this._time.playback;
-	var states;
-	if (!reverse) {
-		states = this._states.getAllAfter(this._lastBuffered, endTime);
-	} else {
-		states = this._states.getAllBefore(this._lastBuffered, endTime);
-	}
-	if (states.length > 0) {
-		this._lastBuffered = states[states.length - 1];
-	}
-	return states;
 };
 
 PlaybackControls.prototype._flushUpdates = function() {
@@ -151,7 +137,7 @@ PlaybackControls.prototype._flushUpdates = function() {
 
 PlaybackControls.prototype._bufferRewrites = function(states) {
 	states.forEach(function(state) {
-		var history = this._time.getPlaybackHistory(state.time);
+		var history = this._pointer.getHistory(state.time);
 		if (history.length) {
 			var rewrites = history.map(function(point) {
 				return RewriteOutputState.fromState(state, point.time, point.speed < 0);
@@ -159,7 +145,7 @@ PlaybackControls.prototype._bufferRewrites = function(states) {
 			var currentState = this.getState();
 			if (currentState) {
 				var fixedOutput = statesUtil.createUnrewritePatch(rewrites, currentState);
-				fixedOutput.time = this._time.getPlaybackTime(currentState.time);
+				fixedOutput.time = this._pointer.getPlaybackTime(currentState.time);
 				rewrites.push(fixedOutput);
 				this._buffer = this._buffer.concat(rewrites);
 			}
@@ -169,7 +155,7 @@ PlaybackControls.prototype._bufferRewrites = function(states) {
 
 PlaybackControls.prototype._bufferStates = function(states, reverse) {
 	states = states.map(function(state) {
-		var time = this._time.getRealTime(state.time);
+		var time = this._pointer.getRealTime(state.time);
 		var outputState = OutputState.fromState(state, time, reverse);
 		return outputState;
 	}.bind(this));

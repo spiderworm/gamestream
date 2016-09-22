@@ -1,6 +1,8 @@
 
-function PlaybackLogger() {
+function PlaybackLogger(realTime, playTime, speed) {
 	this._points = [];
+	this.logPoint(realTime, playTime, speed);
+	this.setCurrentPoint(realTime, playTime);
 }
 
 PlaybackLogger.prototype.logPoint = function(realTime, playTime, speed) {

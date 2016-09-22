@@ -3,7 +3,6 @@ var Stream = require('stream');
 var inherits = require('inherits');
 var PipeBag = require('../stream/PipeBag.js');
 var GameState = require('../states/GameState.js');
-var statesUtil = require('../states/statesUtil.js');
 var StatesTimeStore = require('./StatesTimeStore.js');
 
 function StatesStorage() {
@@ -37,28 +36,6 @@ StatesStorage.prototype.setMaxStorage = function(max) {
 
 StatesStorage.prototype.getStateAtTime = function(time) {
 	return this._timeStore.getAt(time);
-};
-
-StatesStorage.prototype.getAllAfter = function(startState, endTime) {
-	var i1 = (startState ? this._timeStore.states.indexOf(startState) : -1) + 1;
-	var i2 = i1;
-	var endIndexes = this._timeStore.indexesAt(endTime);
-	if (endIndexes.length) {
-		i2 = endIndexes[endIndexes.length - 1] + 1;
-	}
-	var states = this._timeStore.states.slice(i1, i2);
-	return states;
-};
-
-StatesStorage.prototype.getAllBefore = function(startState, endTime) {
-	var i2 = (startState ? this._timeStore.states.indexOf(startState) : this._timeStore.states.length);
-	var i1 = i2;
-	var endIndexes = this._timeStore.indexesAt(endTime);
-	if (endIndexes.length) {
-		i1 = endIndexes[0];
-	}
-	var states = this._timeStore.states.slice(i1, i2).reverse();
-	return states;
 };
 
 StatesStorage.prototype._handleWriteData = function(data) {
