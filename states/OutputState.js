@@ -10,7 +10,11 @@ OutputState.fromState = function(inputState, time, reverse) {
 	if (inputState.update) {
 		var update;
 		if (reverse) {
-			update = inputState.reverseUpdate;
+			if (inputState.next) {
+				update = inputState.next.reverseUpdate;
+			} else {
+				update = {};
+			}
 		} else {
 			update = inputState.update;
 		}

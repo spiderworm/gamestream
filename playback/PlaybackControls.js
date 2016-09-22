@@ -80,8 +80,7 @@ PlaybackControls.prototype.rewind = function(speed) {
 	if (!speed) {
 		speed = 1;
 	}
-	speed = -speed;
-	this.setSpeed(speed);
+	this.setSpeed(-speed);
 };
 
 PlaybackControls.prototype.setSpeed = function(speed) {
@@ -103,9 +102,6 @@ PlaybackControls.prototype.setTime = function(time) {
 };
 
 PlaybackControls.prototype.tick = function() {
-	if (!this._pointer) {
-		return;
-	}
 	this._bufferUpdates();
 	var updates = this._flushUpdates();
 	this._pipes.forEach(function(writable) {
@@ -114,17 +110,12 @@ PlaybackControls.prototype.tick = function() {
 };
 
 PlaybackControls.prototype._bufferUpdates = function() {
-	if (this._pointer.speed === 0) {
+	if (!this._pointer || this._pointer.speed === 0) {
 		return;
 	}
 	var states = this._pointer.advance();
 	if (states.length > 0) {
 		var reverse = this._pointer.speed < 0;
-		if (reverse) {
-			states = states.map(function(state) {
-				return state.next;
-			});
-		}
 		this._bufferStates(states, reverse);
 	}
 };
