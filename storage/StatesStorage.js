@@ -7,7 +7,6 @@ var statesUtil = require('../states/statesUtil.js');
 var StatesTimeStore = require('./StatesTimeStore.js');
 
 function StatesStorage() {
-	this._maxStorage = Infinity;
 	this._pipes = new PipeBag(this);
 	PipeBag.exposeInterface(this, this._pipes);
 	this._timeStore = new StatesTimeStore();
@@ -17,7 +16,7 @@ function StatesStorage() {
 inherits(StatesStorage, Stream);
 
 Object.defineProperty(StatesStorage.prototype, 'maxStorage', {
-	get: function() { return this._maxStorage; },
+	get: function() { return this._timeStore.maxLength; },
 	set: function(v) { this.setMaxStorage(v); }
 });
 
@@ -33,9 +32,7 @@ StatesStorage.prototype.write = function(rawStates) {
 };
 
 StatesStorage.prototype.setMaxStorage = function(max) {
-	if (this._maxStorage !== max) {
-		this._maxStorage = max;
-	}
+	this._timeStore.maxLength = max;
 };
 
 StatesStorage.prototype.getStateAtTime = function(time) {
@@ -54,7 +51,7 @@ StatesStorage.prototype.getAllAfter = function(startState, endTime) {
 };
 
 StatesStorage.prototype.getAllBefore = function(startState, endTime) {
-	var i2 = (startState ? this._timeStore.states.indexOf(startState) : this._timeStore.length);
+	var i2 = (startState ? this._timeStore.states.indexOf(startState) : this._timeStore.states.length);
 	var i1 = i2;
 	var endIndexes = this._timeStore.indexesAt(endTime);
 	if (endIndexes.length) {
