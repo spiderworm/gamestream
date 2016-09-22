@@ -56,7 +56,7 @@ function rewind() {
 
 function fastForward() {
 	console.info('-- fast forwarding');
-	stream1.fastForward(3.5);
+	stream1.fastForward(4);
 	setTimeout(play, CONTROLS_SWITCH_INTERVAL_MS);
 }
 

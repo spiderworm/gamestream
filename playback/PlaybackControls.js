@@ -56,7 +56,7 @@ PlaybackControls.prototype.write = function(data) {
 };
 
 PlaybackControls.prototype.getState = function() {
-	return this._states.getStateAt(this.getTime());
+	return this._states.getStateAtTime(this.getTime());
 };
 
 PlaybackControls.prototype.play = function() {
@@ -115,6 +115,19 @@ PlaybackControls.prototype._bufferUpdates = function() {
 	if (this._time.speed === 0) {
 		return;
 	}
+	var states = this._advancePointer();
+	if (states.length > 0) {
+		var reverse = this._time.speed < 0;
+		if (reverse) {
+			states = states.map(function(state) {
+				return state.next;
+			});
+		}
+		this._bufferStates(states, reverse);
+	}
+};
+
+PlaybackControls.prototype._advancePointer = function() {
 	this._time.advancePointer();
 	var reverse = this._time.speed < 0;
 	var endTime = this._time.playback;
@@ -125,9 +138,9 @@ PlaybackControls.prototype._bufferUpdates = function() {
 		states = this._states.getAllBefore(this._lastBuffered, endTime);
 	}
 	if (states.length > 0) {
-		this._bufferStates(states, reverse);
 		this._lastBuffered = states[states.length - 1];
 	}
+	return states;
 };
 
 PlaybackControls.prototype._flushUpdates = function() {

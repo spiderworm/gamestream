@@ -18,19 +18,23 @@ GameState.fromOutputState = function(outputState) {
 };
 
 GameState.setPreviousState = function(targetState, previousState) {
-	var previousValues = previousState ? previousState.values : {};
-	this._computeValues(targetState, previousValues);
-	this._computeReverseUpdate(targetState, previousValues);
+	targetState.previous = previousState;
+	if (previousState) {
+		previousState.next = targetState;
+	}
+	this._computeValues(targetState);
+	this._computeReverseUpdate(targetState);
 };
 
-GameState._computeValues = function(targetState, previousStateValues) {
-	var values = objectFactory.clone(previousStateValues, [targetState.update]);
+GameState._computeValues = function(targetState) {
+	var values = (targetState.previous ? targetState.previous.values : null) || {};
+	values = objectFactory.clone(values, [targetState.update]);
 	targetState.values = values;
 };
 
-GameState._computeReverseUpdate = function(targetState, previousStateValues) {
-	var reverseUpdate = objectFactory.clone(targetState.update);
-	reverseUpdate = objectFactory.cloneNarrow(reverseUpdate, [previousStateValues]);
+GameState._computeReverseUpdate = function(targetState) {
+	var previousValues = (targetState.previous ? targetState.previous.values : null) || {};
+	reverseUpdate = objectFactory.cloneNarrow(targetState.update, [previousValues]);
 	targetState.reverseUpdate = reverseUpdate;
 };
 
