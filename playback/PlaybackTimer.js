@@ -1,6 +1,7 @@
 
 var now = require('../misc/now.js');
 var playbackUtil = require('./playbackUtil.js');
+var PlaybackPoint = require('./PlaybackPoint.js');
 
 function PlaybackTimer(playTime, realTime) {
 	this._lastPlayback = playTime;
@@ -22,9 +23,19 @@ Object.defineProperty(PlaybackTimer.prototype, 'speed', {
 	set: function(v) { this.setSpeed(v); }
 });
 
+PlaybackTimer.prototype.getPoint = function() {
+	var real = now();
+	return new PlaybackPoint(real, this.getPlaybackTime(real), this._speed);
+};
+
 PlaybackTimer.prototype.setSpeed = function(speed) {
-	this._stablize();
+	this._rebase();
 	this._speed = speed;
+	return new PlaybackPoint(
+		this._lastReal,
+		this._lastPlayback,
+		this._speed
+	);
 };
 
 PlaybackTimer.prototype.getRealTime = function(playTime) {
@@ -44,9 +55,14 @@ PlaybackTimer.prototype.getPlaybackTime = function(realTime) {
 PlaybackTimer.prototype.setPlaybackTime = function(playTime) {
 	this._lastReal = now();
 	this._lastPlayback = playTime;
+	return new PlaybackPoint(
+		this._lastReal,
+		this._lastPlayback,
+		this._speed
+	);
 };
 
-PlaybackTimer.prototype._stablize = function() {
+PlaybackTimer.prototype._rebase = function() {
 	var real = now();
 	var play = this.getPlaybackTime(real);
 	this._lastReal = real;

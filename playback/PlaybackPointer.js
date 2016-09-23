@@ -6,7 +6,7 @@ var PlaybackLogger = require('./PlaybackLogger.js');
 function PlaybackPointer() {
 	var time = now();
 	this._time = new PlaybackTimer(time, time);
-	this._logs = new PlaybackLogger(time, time, this._time.speed);
+	this._logs = new PlaybackLogger(this._time.getPoint());
 	this._lastBuffered = undefined;
 }
 
@@ -25,16 +25,17 @@ PlaybackPointer.prototype.setStatesStore = function(statesTimeStore) {
 };
 
 PlaybackPointer.prototype.setSpeed = function(speed) {
-	this._logs.logPoint(this._time.real, this._time.playback, this._time.speed);
-	this._time.setSpeed(speed);
+	var point = this._time.setSpeed(speed);
+	this._logs.logPoint(point);
 };
 
 PlaybackPointer.prototype.setTime = function(playbackTime) {
-	this._time.playback = playbackTime;
+	var point = this._time.setPlaybackTime(playbackTime);
+	this._logs.logPoint(point);
 };
 
 PlaybackPointer.prototype.advance = function() {
-	this._logs.setCurrentPoint(this._time.real, this._time.playback);
+	this._logs.setCurrentPoint(this._time.getPoint());
 	if (!this._timeStore || this._time.speed === 0) {
 		return [];
 	}
@@ -69,9 +70,11 @@ PlaybackPointer.prototype.getCurrentState = function() {
 };
 
 PlaybackPointer.prototype.moveTo = function(playTime) {
-	this._logs.logPoint(this._time.real, this._time.playback, undefined);
-	this._time.setPlaybackTime(playTime);
-	this._logs.logPoint(this._time.real, this._time.playback, this._speed);
+	var point = this._time.getPoint();
+	point.speed = undefined;
+	this._logs.logPoint(point);
+	var point = this._time.setPlaybackTime(playTime);
+	this._logs.logPoint(point);
 };
 
 PlaybackPointer.prototype._findPassedStatesForward = function(endTime) {

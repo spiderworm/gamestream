@@ -1,23 +1,16 @@
 
-function PlaybackLogger(realTime, playTime, speed) {
+function PlaybackLogger(playbackPoint) {
 	this._points = [];
-	this.logPoint(realTime, playTime, speed);
-	this.setCurrentPoint(realTime, playTime);
+	this.logPoint(playbackPoint);
+	this.setCurrentPoint(playbackPoint);
 }
 
-PlaybackLogger.prototype.logPoint = function(realTime, playTime, speed) {
-	this._points.push({
-		realTime: realTime,
-		playTime: playTime,
-		speed: speed
-	});
+PlaybackLogger.prototype.logPoint = function(playbackPoint) {
+	this._points.push(playbackPoint);
 };
 
-PlaybackLogger.prototype.setCurrentPoint = function(realTime, playTime) {
-	this._current = {
-		realTime: realTime,
-		playTime: playTime
-	};
+PlaybackLogger.prototype.setCurrentPoint = function(playbackPoint) {
+	this._current = playbackPoint;
 };
 
 PlaybackLogger.prototype.getPlaybackHistory = function(realTime) {
@@ -29,16 +22,16 @@ PlaybackLogger.prototype.getPlaybackHistory = function(realTime) {
 	}
 	points.forEach(function(next) {
 		if (previous) {
-			if (previous.speed === 0 && previous.realTime === realTime) {
+			if (previous.speed === 0 && previous.real === realTime) {
 				results.push({
-					time: previous.playTime,
+					time: previous.play,
 					speed: previous.speed
 				});
 			} else if (
-				(previous.speed > 0 && realTime >= previous.realTime && realTime < next.realTime) ||
-				(previous.speed < 0 && realTime <= previous.realTime && realTime > next.realTime)
+				(previous.speed > 0 && realTime >= previous.real && realTime < next.real) ||
+				(previous.speed < 0 && realTime <= previous.real && realTime > next.real)
 			) {
-				var time = previous.playTime + ((realTime - previous.realTime) * previous.speed);
+				var time = previous.play + ((realTime - previous.real) * previous.speed);
 				results.push({
 					time: time,
 					speed: previous.speed
