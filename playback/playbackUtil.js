@@ -1,12 +1,12 @@
 
 var now = require('../misc/now.js');
 
-function playbackToReal(playbackTime, lastRealTime, lastPlaybackTime, speed) {
-	return lastRealTime + ((playbackTime - lastPlaybackTime) * (1 / speed));
+function playbackToReal(playbackTime, referencePoint) {
+	return referencePoint.real + ((playbackTime - referencePoint.play) * (1 / referencePoint.speed));
 }
 
-function realToPlayback(realTime, lastRealTime, lastPlaybackTime, speed) {
-	return lastPlaybackTime + (speed * (realTime - lastRealTime));
+function realToPlayback(realTime, referencePoint) {
+	return referencePoint.play + (referencePoint.speed * (realTime - referencePoint.real));
 }
 
 var playbackUtil = {

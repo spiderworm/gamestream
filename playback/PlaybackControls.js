@@ -1,11 +1,11 @@
 
 var Stream = require('stream');
 var inherits = require('inherits');
-var now = require('../misc/now.js');
+var playbackUtil = require('./playbackUtil.js');
 var OutputState = require('../states/OutputState.js');
 var RewriteOutputState = require('../states/RewriteOutputState.js');
+var CatchUpOutputState = require('../states/CatchUpOutputState.js');
 var PlaybackPointer = require('./PlaybackPointer.js');
-var statesUtil = require('../states/statesUtil.js');
 var PipeBag = require('../stream/PipeBag.js');
 var CustomWritable = require('../stream/CustomWritable.js');
 
@@ -81,7 +81,7 @@ PlaybackControls.prototype.setSpeed = function(speed) {
 	if (speed !== this._pointer.speed) {
 		this._updatePointer();
 		this._pointer.setSpeed(speed);
-		var update = new OutputState(now());
+		var update = new OutputState(playbackUtil.now());
 		update.speed = speed;
 		this._pipes.out([update]);
 	}
@@ -100,41 +100,49 @@ PlaybackControls.prototype.tick = function() {
 };
 
 PlaybackControls.prototype._updatePointer = function() {
-	if (!this._pointer || this._pointer.speed === 0) {
+	if (this._pointer.speed === 0) {
 		return;
 	}
 	var states = this._pointer.advance();
 	if (states.length > 0) {
-		var reverse = this._pointer.speed < 0;
-		this._outputStates(states, reverse);
+		var point = this._pointer.getCurrentPoint();
+		states = createOutputStates(states, point);
+		this._pipes.out(states);
 	}
 };
 
 PlaybackControls.prototype._outputRewrites = function(states) {
+	var rewrites = createRewriteStates(states, this._pointer);
+	if (rewrites.length > 0) {
+		var currentState = this._pointer.getCurrentState();
+		var time = this._pointer.getPlaybackTime(currentState.time);
+		var unrewriteState = CatchUpOutputState.fromRewriteStates(rewrites, currentState, time);
+		this._pipes.out(rewrites.concat(unrewriteState));
+	}
+};
+
+function createOutputStates(states, playbackPoint) {
+	return states.map(function(state) {
+		var time = playbackUtil.playbackToReal(state.time, playbackPoint);
+		var reverse = playbackPoint.speed < 0;
+		var outputState = OutputState.fromState(state, time, reverse);
+		return outputState;
+	});
+}
+
+function createRewriteStates(states, playbackPointer) {
+	var currentState = playbackPointer.getCurrentState();
+	var allRewrites = [];
 	states.forEach(function(state) {
-		var history = this._pointer.getHistory(state.time);
-		if (history.length) {
+		var history = playbackPointer.getHistory(state.time);
+		if (history.length > 0) {
 			var rewrites = history.map(function(point) {
 				return RewriteOutputState.fromState(state, point.time, point.speed < 0);
 			});
-			var currentState = this.getState();
-			if (currentState) {
-				var fixedOutput = statesUtil.createUnrewritePatch(rewrites, currentState);
-				fixedOutput.time = this._pointer.getPlaybackTime(currentState.time);
-				rewrites.push(fixedOutput);
-				this._pipes.out(rewrites);
-			}
+			allRewrites = allRewrites.concat(rewrites);
 		}
-	}.bind(this));
-};
-
-PlaybackControls.prototype._outputStates = function(states, reverse) {
-	states = states.map(function(state) {
-		var time = this._pointer.getRealTime(state.time);
-		var outputState = OutputState.fromState(state, time, reverse);
-		return outputState;
-	}.bind(this));
-	this._pipes.out(states);
-};
+	});
+	return allRewrites;
+}
 
 module.exports = PlaybackControls;

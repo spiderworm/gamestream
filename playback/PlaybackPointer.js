@@ -6,7 +6,7 @@ var PlaybackLogger = require('./PlaybackLogger.js');
 function PlaybackPointer(statesTimeStore) {
 	this._timeStore = statesTimeStore;
 	var time = now();
-	this._time = new PlaybackTimer(time, time);
+	this._time = new PlaybackTimer(time);
 	this._logs = new PlaybackLogger(this._time.getPoint());
 	this._lastBuffered = undefined;
 }
@@ -64,6 +64,10 @@ PlaybackPointer.prototype.getRealTime = function(playbackTime) {
 
 PlaybackPointer.prototype.getCurrentState = function() {
 	return this._timeStore.getAt(this._time.playback);
+};
+
+PlaybackPointer.prototype.getCurrentPoint = function() {
+	return this._logs.current;
 };
 
 PlaybackPointer.prototype.moveTo = function(playTime) {

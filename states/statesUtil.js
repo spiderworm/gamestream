@@ -20,18 +20,9 @@ function mergeStates(states) {
 	return merged;
 }
 
-function createUnrewritePatch(rewrites, state) {
-	var output = new RewriteOutputState();
-	var buildTreeArgs = rewrites.map(function(o) { return o.update; });
-	output.update = objectFactory.clone({}, buildTreeArgs);
-	output.update = objectFactory.cloneNarrow(output.update, [state.values]);
-	return output;
-}
-
 var statesUtil = {
 	timeSort: timeSort,
 	merge: mergeStates,
-	createUnrewritePatch: createUnrewritePatch
 };
 
 module.exports = statesUtil;

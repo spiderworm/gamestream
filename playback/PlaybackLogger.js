@@ -10,15 +10,15 @@ PlaybackLogger.prototype.logPoint = function(playbackPoint) {
 };
 
 PlaybackLogger.prototype.setCurrentPoint = function(playbackPoint) {
-	this._current = playbackPoint;
+	this.current = playbackPoint;
 };
 
 PlaybackLogger.prototype.getPlaybackHistory = function(realTime) {
 	var results = [];
 	var previous;
 	var points = [].concat(this._points);
-	if (this._current) {
-		points.push(this._current);
+	if (this.current) {
+		points.push(this.current);
 	}
 	points.forEach(function(next) {
 		if (previous) {

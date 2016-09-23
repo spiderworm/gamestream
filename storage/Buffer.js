@@ -14,6 +14,7 @@ inherits(Buffer, Stream);
 
 Buffer.prototype.write = function(vals) {
 	this._items = this._items.concat(vals);
+	return true;
 };
 
 Buffer.prototype.flush = function() {

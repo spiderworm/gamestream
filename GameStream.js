@@ -153,9 +153,7 @@ GameStream.prototype._updatePushing = function() {
 
 GameStream.prototype._emitGameUpdates = function(gameUpdates) {
 	if (gameUpdates.length) {
-		this._pipes.forEach(function(writable) {
-			writable.write(gameUpdates);
-		});
+		this._pipes.out(gameUpdates);
 	}
 };
 
