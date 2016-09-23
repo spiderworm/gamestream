@@ -2,7 +2,7 @@
 var Stream = require('stream');
 var inherits = require('inherits');
 var PipeBag = require('../../stream/PipeBag.js');
-var GameState = require('../../states/GameState.js');
+var State = require('../../states/State.js');
 
 function StateFactory() {
 	this._pipes = new PipeBag(this);
@@ -20,7 +20,7 @@ StateFactory.prototype.write = function(rawStates) {
 
 StateFactory.prototype._createStates = function(rawStatesArray) {
 	return rawStatesArray.map(function(rawState) {
-		var state = GameState.fromOutputState(rawState);
+		var state = State.fromOutputState(rawState);
 		return state;
 	}.bind(this));
 };

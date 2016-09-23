@@ -9,6 +9,7 @@ var CustomWritable = require('./stream/CustomWritable.js');
 var Config = require('./misc/Config.js');
 var StateFactory = require('./states/factories/StateFactory.js');
 var StatesTimeStore = require('./storage/StatesTimeStore.js');
+var Buffer = require('./storage/Buffer.js');
 
 var defaultConfig = new Config({
 	push: true,
@@ -35,11 +36,14 @@ function GameStream(config) {
 	this._playback = new PlaybackControls(this._store);
 	PlaybackControls.exposeInterface(this, this._playback);
 
+	this._outputBuffer = new Buffer();
+
 	this._emitter = new CustomWritable(this._emitGameUpdates.bind(this));
 
 	this._stateFactory.pipe(this._store);
 	this._stateFactory.pipe(this._playback);
-	this._playback.pipe(this._emitter);
+	this._playback.pipe(this._outputBuffer);
+	this._outputBuffer.pipe(this._emitter);
 
 	config = new Config(defaultConfig, [config]);
 	Config.apply(config, this);
@@ -117,6 +121,7 @@ GameStream.prototype.getState = function() {
 
 GameStream.prototype.tick = function() {
 	this._playback.tick();
+	this._outputBuffer.flush();
 };
 
 GameStream.prototype._updatePushing = function() {

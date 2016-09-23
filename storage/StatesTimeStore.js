@@ -1,7 +1,7 @@
 
 var Stream = require('stream');
 var inherits = require('inherits');
-var GameState = require('../states/GameState.js');
+var State = require('../states/State.js');
 var StateZero = require('../states/StateZero.js');
 
 function StatesTimeStore() {
@@ -73,7 +73,7 @@ StatesTimeStore.prototype._insertAt = function(state, index) {
 
 StatesTimeStore.prototype._updateLinkingAtIndex = function(index) {
 	for (var i=index; i<this.states.length; i++) {
-		GameState.setPreviousState(
+		State.setPreviousState(
 			this.states[i],
 			i > 0 ? this.states[i - 1] : this._stateZero
 		);
@@ -98,7 +98,7 @@ StatesTimeStore.prototype._rebase = function(baseState) {
 		stateZero = new StateZero();
 	}
 	if (this.states[0]) {
-		GameState.setPreviousState(
+		State.setPreviousState(
 			this.states[0],
 			stateZero
 		);

@@ -12,8 +12,6 @@ var CustomWritable = require('../stream/CustomWritable.js');
 function PlaybackControls(statesTimeStore) {
 	Stream.call(this, { objectMode: true });
 
-	this._buffer = [];
-
 	this._pointer = new PlaybackPointer(statesTimeStore);
 
 	this._pipes = new PipeBag(this);
@@ -50,7 +48,7 @@ Object.defineProperty(PlaybackControls.prototype, 'time', {
 });
 
 PlaybackControls.prototype.write = function(data) {
-	return this._bufferRewrites(data);
+	return this._outputRewrites(data);
 };
 
 PlaybackControls.prototype.getState = function() {
@@ -81,11 +79,11 @@ PlaybackControls.prototype.rewind = function(speed) {
 
 PlaybackControls.prototype.setSpeed = function(speed) {
 	if (speed !== this._pointer.speed) {
-		this._bufferUpdates();
+		this._updatePointer();
+		this._pointer.setSpeed(speed);
 		var update = new OutputState(now());
 		update.speed = speed;
-		this._buffer.push(update);
-		this._pointer.setSpeed(speed);
+		this._pipes.out([update]);
 	}
 };
 
@@ -98,31 +96,21 @@ PlaybackControls.prototype.setTime = function(time) {
 };
 
 PlaybackControls.prototype.tick = function() {
-	this._bufferUpdates();
-	var updates = this._flushUpdates();
-	this._pipes.forEach(function(writable) {
-		writable.write(updates);
-	});
+	this._updatePointer();
 };
 
-PlaybackControls.prototype._bufferUpdates = function() {
+PlaybackControls.prototype._updatePointer = function() {
 	if (!this._pointer || this._pointer.speed === 0) {
 		return;
 	}
 	var states = this._pointer.advance();
 	if (states.length > 0) {
 		var reverse = this._pointer.speed < 0;
-		this._bufferStates(states, reverse);
+		this._outputStates(states, reverse);
 	}
 };
 
-PlaybackControls.prototype._flushUpdates = function() {
-	var states = this._buffer;
-	this._buffer = [];
-	return states;
-};
-
-PlaybackControls.prototype._bufferRewrites = function(states) {
+PlaybackControls.prototype._outputRewrites = function(states) {
 	states.forEach(function(state) {
 		var history = this._pointer.getHistory(state.time);
 		if (history.length) {
@@ -134,19 +122,19 @@ PlaybackControls.prototype._bufferRewrites = function(states) {
 				var fixedOutput = statesUtil.createUnrewritePatch(rewrites, currentState);
 				fixedOutput.time = this._pointer.getPlaybackTime(currentState.time);
 				rewrites.push(fixedOutput);
-				this._buffer = this._buffer.concat(rewrites);
+				this._pipes.out(rewrites);
 			}
 		}
 	}.bind(this));
 };
 
-PlaybackControls.prototype._bufferStates = function(states, reverse) {
+PlaybackControls.prototype._outputStates = function(states, reverse) {
 	states = states.map(function(state) {
 		var time = this._pointer.getRealTime(state.time);
 		var outputState = OutputState.fromState(state, time, reverse);
 		return outputState;
 	}.bind(this));
-	this._buffer = this._buffer.concat(states);
+	this._pipes.out(states);
 };
 
 module.exports = PlaybackControls;
