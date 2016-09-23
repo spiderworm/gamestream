@@ -1,6 +1,6 @@
 {
   "name": "gamestream",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "description": "Store, stream, and playback your game state on client and server.",
   "main": "index.js",
   "scripts": {
