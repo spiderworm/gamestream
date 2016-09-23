@@ -3,7 +3,8 @@ var PlaybackTimer = require('./PlaybackTimer.js');
 var now = require('../misc/now.js');
 var PlaybackLogger = require('./PlaybackLogger.js');
 
-function PlaybackPointer() {
+function PlaybackPointer(statesTimeStore) {
+	this._timeStore = statesTimeStore;
 	var time = now();
 	this._time = new PlaybackTimer(time, time);
 	this._logs = new PlaybackLogger(this._time.getPoint());
@@ -20,10 +21,6 @@ Object.defineProperty(PlaybackPointer.prototype, 'time', {
 	set: function(v) { this.setTime(v); }
 });
 
-PlaybackPointer.prototype.setStatesStore = function(statesTimeStore) {
-	this._timeStore = statesTimeStore;
-};
-
 PlaybackPointer.prototype.setSpeed = function(speed) {
 	var point = this._time.setSpeed(speed);
 	this._logs.logPoint(point);
@@ -36,7 +33,7 @@ PlaybackPointer.prototype.setTime = function(playbackTime) {
 
 PlaybackPointer.prototype.advance = function() {
 	this._logs.setCurrentPoint(this._time.getPoint());
-	if (!this._timeStore || this._time.speed === 0) {
+	if (this._time.speed === 0) {
 		return [];
 	}
 	var endTime = this._time.playback;

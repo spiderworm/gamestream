@@ -1,4 +1,6 @@
 
+var Stream = require('stream');
+var inherits = require('inherits');
 var GameState = require('../states/GameState.js');
 var StateZero = require('../states/StateZero.js');
 
@@ -8,10 +10,19 @@ function StatesTimeStore() {
 	this._rebase();
 }
 
+inherits(StatesTimeStore, Stream);
+
 Object.defineProperty(StatesTimeStore.prototype, 'maxLength', {
 	get: function() { return this._maxLength; },
 	set: function(v) { this.setMaxLength(v); }
 });
+
+StatesTimeStore.prototype.write = function(states) {
+	states.forEach(function(state) {
+		this.insertLate(state);
+	}.bind(this));
+	return true;
+};
 
 StatesTimeStore.prototype.setMaxLength = function(length) {
 	this._maxLength = length;

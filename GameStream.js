@@ -7,7 +7,8 @@ var PlaybackControls = require('./playback/PlaybackControls.js');
 var statesUtil = require('./states/statesUtil.js');
 var CustomWritable = require('./stream/CustomWritable.js');
 var Config = require('./misc/Config.js');
-var StatesStorage = require('./storage/StatesStorage.js');
+var StateFactory = require('./states/factories/StateFactory.js');
+var StatesTimeStore = require('./storage/StatesTimeStore.js');
 
 var defaultConfig = new Config({
 	push: true,
@@ -27,14 +28,17 @@ function GameStream(config) {
 	this._pipes = new PipeBag(this);
 	PipeBag.exposeInterface(this, this._pipes);
 
-	this._states = new StatesStorage();
+	this._stateFactory = new StateFactory();
 
-	this._playback = new PlaybackControls();
+	this._store = new StatesTimeStore();
+
+	this._playback = new PlaybackControls(this._store);
 	PlaybackControls.exposeInterface(this, this._playback);
 
 	this._emitter = new CustomWritable(this._emitGameUpdates.bind(this));
 
-	this._states.pipe(this._playback);
+	this._stateFactory.pipe(this._store);
+	this._stateFactory.pipe(this._playback);
 	this._playback.pipe(this._emitter);
 
 	config = new Config(defaultConfig, [config]);
@@ -84,17 +88,16 @@ Object.defineProperty(GameStream.prototype, 'pushInterval', {
 });
 
 Object.defineProperty(GameStream.prototype, 'maxStorage', {
-	get: function() { return this._states.maxStorage; },
-	set: function(v) { this._states.maxStorage = v; }
+	get: function() { return this._store.maxLength; },
+	set: function(v) { this._store.maxLength = v; }
 });
 
 GameStream.prototype.write = function(outputStates) {
-	this._states.write(outputStates);
-	return true;
+	return this._stateFactory.write(outputStates);
 };
 
 GameStream.prototype.updateAt = function(time, update) {
-	this._states.write([{time: time, update: update}]);
+	this.write([{time: time, update: update}]);
 };
 
 GameStream.prototype.updateNow = function(update) {

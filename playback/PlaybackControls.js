@@ -9,19 +9,15 @@ var statesUtil = require('../states/statesUtil.js');
 var PipeBag = require('../stream/PipeBag.js');
 var CustomWritable = require('../stream/CustomWritable.js');
 
-function PlaybackControls() {
+function PlaybackControls(statesTimeStore) {
 	Stream.call(this, { objectMode: true });
 
 	this._buffer = [];
 
-	this._pointer = new PlaybackPointer();
+	this._pointer = new PlaybackPointer(statesTimeStore);
 
 	this._pipes = new PipeBag(this);
 	PipeBag.exposeInterface(this, this._pipes);
-
-	this.on('pipe', function(statesStorage) {
-		this._pointer.setStatesStore(statesStorage._timeStore);
-	}.bind(this));
 }
 
 inherits(PlaybackControls, Stream);
