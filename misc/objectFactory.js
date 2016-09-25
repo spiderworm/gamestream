@@ -103,5 +103,7 @@ ObjectFactoryFactory.prototype.clone = new ObjectFactory({clone: true, deep: tru
 
 ObjectFactoryFactory.prototype.cloneNarrow = new ObjectFactory({clone: true, deep: true, narrow: true});
 
+ObjectFactoryFactory.prototype.assignDeep = new ObjectFactory({clone: false, deep: true, narrow: false});
+
 var objectFactory = new ObjectFactoryFactory();
 module.exports = objectFactory;
