@@ -14,18 +14,21 @@ function DemoOne() {
 
 	var cube1 = new CubeEntity();
 
-	var game = new DemoGame();
-	game.entities['cube1'] = cube1;
+	var game1 = new DemoGame();
+	game1.entities['cube1'] = cube1;
 	//game.systems.view.threes.camera.position.set(10,0,.25);
 	//game.systems.view.threes.camera.lookAt({x: 0, y: 0, z: 0});
+	this.games.push(game1);
 
-	this.games.push(game);
+	var game2 = new DemoGame();
+	this.games.push(game2);
+	game2.stream.setTime((+new Date()) - 200);
 
-	var tick = (function() {
-		requestAnimationFrame(tick);
-		this.tick();
-	}).bind(this);
-	tick();
+	game1.stream.pipe(game2.stream);
+
+	var tick = (function() { requestAnimationFrame(tick); this.tick(); }).bind(this); tick();
+
+	//setInterval(this.tick.bind(this),250);
 }
 
 DemoOne.prototype.tick = function() {
@@ -66,6 +69,7 @@ DemoOne.prototype.render = function() {
 		);
 		sceneThrees.camera.aspect = aspect;
 		sceneThrees.camera.updateProjectionMatrix();
+		sceneThrees.camera.lookAt({x: 0, y: 0, z: 0});
 		this.threes.renderer.render(sceneThrees.scene, sceneThrees.camera);
 	}.bind(this));
 };

@@ -21,34 +21,36 @@ PhysicsSystem.prototype.tick = function(ms, entities) {
 };
 
 PhysicsSystem.prototype._updateEntityPhysics = function(entity) {
-	if (entity.life.alive && entity.physics && entity.physics.alive) {
-		if (!entity.physics._cannon) {
-			var type = entity.physics.static === true ? CANNON.Body.STATIC : CANNON.Body.DYNAMIC;
-			var mass = entity.physics.mass || 1;
-			if (type === CANNON.Body.STATIC) {
-				mass = 0;
+	if (entity.physics) {
+		if (entity.life.alive && entity.physics.alive) {
+			if (!entity.physics._cannon) {
+				var type = entity.physics.static === true ? CANNON.Body.STATIC : CANNON.Body.DYNAMIC;
+				var mass = entity.physics.mass || 1;
+				if (type === CANNON.Body.STATIC) {
+					mass = 0;
+				}
+				entity.physics._cannon = new CANNON.Body({
+					mass: mass,
+					type: type
+				});
+				entity.physics._cannon.position.set(
+					entity.physics.position.x,
+					entity.physics.position.y,
+					entity.physics.position.z
+				);
+				this._cannon.addBody(entity.physics._cannon);
 			}
-			entity.physics._cannon = new CANNON.Body({
-				mass: mass,
-				type: type
-			});
-			entity.physics._cannon.position.set(
-				entity.physics.position.x,
-				entity.physics.position.y,
-				entity.physics.position.z
-			);
-			this._cannon.addBody(entity.physics._cannon);
-		}
-	} else {
-		if (entity.physics._cannon) {
-			this._cannon.removeBody(entity.physics._cannon);
-			delete entity.physics._cannon;
+		} else {
+			if (entity.physics._cannon) {
+				this._cannon.removeBody(entity.physics._cannon);
+				delete entity.physics._cannon;
+			}
 		}
 	}
 };
 
 PhysicsSystem.prototype._updateEntityShape = function(entity) {
-	if (entity.physics._cannon && entity.shapes) {
+	if (entity.physics && entity.physics._cannon && entity.shapes) {
 
 		Object.keys(entity.shapes).forEach(function(id) {
 			var shape = entity.shapes[id];
@@ -91,8 +93,7 @@ PhysicsSystem.prototype._updateEntityShape = function(entity) {
 };
 
 PhysicsSystem.prototype._updateEntityPosition = function(entity) {
-	return;
-	if (entity.physics._cannon) {
+	if (entity.physics && entity.physics._cannon) {
 		entity.physics._cannon.position.set(
 			entity.physics.position.x,
 			entity.physics.position.y,
@@ -102,7 +103,7 @@ PhysicsSystem.prototype._updateEntityPosition = function(entity) {
 };
 
 PhysicsSystem.prototype._applyEntityPosition = function(entity) {
-	if (entity.physics._cannon) {
+	if (entity.physics && entity.physics._cannon) {
 		entity.physics.position = {
 			x: entity.physics._cannon.position.x,
 			y: entity.physics._cannon.position.y,

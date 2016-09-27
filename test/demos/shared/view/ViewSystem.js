@@ -16,28 +16,32 @@ ViewSystem.prototype.tick = function(ms, entities) {
 };
 
 ViewSystem.prototype._updateEntityView = function(entity) {
-	if (
-		entity.view &&
-		entity.life.alive &&
-		entity.view.alive &&
-		entity.physics &&
-		entity.physics.alive
-	) {
-		if (!entity.view._three) {
-			entity.view._three = new THREE.Object3D();
-			this._threes.scene.add(entity.view._three);
-		}
-	} else {
-		if (entity.view._three) {
-			this._threes.scene.remove(entity.view._three);
-			delete entity.view._three;
+	if (entity.view) {
+		if (
+			entity.life.alive &&
+			entity.view.alive &&
+			entity.physics &&
+			entity.physics.alive
+		) {
+			if (!entity.view._three) {
+				entity.view._three = new THREE.Object3D();
+				this._threes.scene.add(entity.view._three);
+			}
+		} else {
+			if (entity.view._three) {
+				this._threes.scene.remove(entity.view._three);
+				delete entity.view._three;
+			}
 		}
 	}
 };
 
 ViewSystem.prototype._updateEntityShape = function(entity) {
-	if (entity.view._three && entity.shapes) {
+	if (entity.view && entity.view._three && entity.shapes) {
 		Object.keys(entity.shapes).forEach(function(id) {
+			if (id === 'alive') {
+				return;
+			}
 			var shape = entity.shapes[id];
 
 			if (!shape._three) {
@@ -75,7 +79,7 @@ ViewSystem.prototype._updateEntityShape = function(entity) {
 };
 
 ViewSystem.prototype._updateEntityPosition = function(entity) {
-	if (entity.view._three) {
+	if (entity.view && entity.view._three) {
 		entity.view._three.position.set(
 			entity.physics.position.x,
 			entity.physics.position.y,
