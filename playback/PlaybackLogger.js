@@ -22,14 +22,14 @@ PlaybackLogger.prototype.getPlaybackHistory = function(realTime) {
 	}
 	points.forEach(function(next) {
 		if (previous) {
-			if (previous.speed === 0 && previous.real === realTime) {
+			if (previous.speed === 0 && previous.play === realTime) {
 				results.push({
 					time: previous.play,
 					speed: previous.speed
 				});
 			} else if (
-				(previous.speed > 0 && realTime >= previous.real && realTime < next.real) ||
-				(previous.speed < 0 && realTime <= previous.real && realTime > next.real)
+				(previous.speed > 0 && realTime >= previous.play && realTime < next.play) ||
+				(previous.speed < 0 && realTime <= previous.play && realTime > next.play)
 			) {
 				var time = previous.play + ((realTime - previous.real) * previous.speed);
 				results.push({

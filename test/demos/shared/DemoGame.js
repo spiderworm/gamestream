@@ -7,7 +7,9 @@ var FloorEntity = require('./entities/FloorEntity.js');
 var GameStream = require('../GameStream.js');
 var Entity = require('./ecs/Entity.js');
 
-function DemoGame() {
+function DemoGame(isHost) {
+	this.isHost = !!isHost;
+
 	this.systems = {
 		physics: new PhysicsSystem(),
 		view: new ViewSystem()
@@ -20,7 +22,10 @@ function DemoGame() {
 	this.threes = new DemoThrees();
 
 	this.stream = new GameStream();
-	this.stream.on('data', this.applyState.bind(this));
+
+	if (!this.isHost) {
+		this.stream.on('data', this.applyState.bind(this));
+	}
 }
 
 DemoGame.prototype.tick = function() {
@@ -33,7 +38,9 @@ DemoGame.prototype.tick = function() {
 	this.eachSystem(function(system) {
 		system.tick(delta, this.entities);
 	}.bind(this));
-	this.streamState();
+	if (this.isHost) {
+		this.streamState();
+	}
 };
 
 DemoGame.prototype.eachSystem = function(callback) {

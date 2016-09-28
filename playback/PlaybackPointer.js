@@ -27,6 +27,9 @@ PlaybackPointer.prototype.setSpeed = function(speed) {
 };
 
 PlaybackPointer.prototype.setTime = function(playbackTime) {
+	var point = this._time.getPoint();
+	point.speed = undefined;
+	this._logs.logPoint(point);
 	var point = this._time.setPlaybackTime(playbackTime);
 	this._logs.logPoint(point);
 };
