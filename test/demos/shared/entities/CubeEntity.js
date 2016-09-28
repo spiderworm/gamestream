@@ -8,6 +8,12 @@ function CubeEntity() {
 				x: 0,
 				y: 0,
 				z: 4
+			},
+			rotation: {
+				w: 1,
+				x: 0,
+				y: 0,
+				z: 0
 			}
 		},
 		view: {

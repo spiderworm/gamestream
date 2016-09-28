@@ -84,6 +84,8 @@ DemoGame.prototype.applyState = function(state) {
 	}
 
 	applyEntitiesState(state.update, this.entities);
+	this._lastTick = state.time;
+	this.tick();
 };
 
 module.exports = DemoGame;

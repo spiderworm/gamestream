@@ -12,6 +12,7 @@ ViewSystem.prototype.tick = function(ms, entities) {
 		this._updateEntityView(entity);
 		this._updateEntityShape(entity);
 		this._updateEntityPosition(entity);
+		this._updateEntityRotation(entity);
 	}.bind(this));
 };
 
@@ -84,6 +85,17 @@ ViewSystem.prototype._updateEntityPosition = function(entity) {
 			entity.physics.position.x,
 			entity.physics.position.y,
 			entity.physics.position.z
+		);
+	}
+};
+
+ViewSystem.prototype._updateEntityRotation = function(entity) {
+	if (entity.view && entity.view._three) {
+		entity.view._three.quaternion.set(
+			entity.physics.rotation.x,
+			entity.physics.rotation.y,
+			entity.physics.rotation.z,
+			entity.physics.rotation.w
 		);
 	}
 };

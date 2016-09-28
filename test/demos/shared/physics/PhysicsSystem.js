@@ -12,11 +12,13 @@ PhysicsSystem.prototype.tick = function(ms, entities) {
 		this._updateEntityPhysics(entity);
 		this._updateEntityShape(entity);
 		this._updateEntityPosition(entity);
+		this._updateEntityRotation(entity);
 	}.bind(this));
 	this._cannon.step(1/60, ms/1000, 30);
 	Object.keys(entities).forEach(function(id) {
 		var entity = entities[id];
 		this._applyEntityPosition(entity);
+		this._applyEntityRotation(entity);
 	}.bind(this));
 };
 
@@ -111,5 +113,29 @@ PhysicsSystem.prototype._applyEntityPosition = function(entity) {
 		};
 	}
 };
+
+PhysicsSystem.prototype._updateEntityRotation = function(entity) {
+	if (entity.physics && entity.physics._cannon) {
+		entity.physics._cannon.quaternion.set(
+			entity.physics.rotation.x,
+			entity.physics.rotation.y,
+			entity.physics.rotation.z,
+			entity.physics.rotation.w
+		);
+	}
+};
+
+PhysicsSystem.prototype._applyEntityRotation = function(entity) {
+	if (entity.physics && entity.physics._cannon) {
+		entity.physics.rotation = {
+			w: entity.physics._cannon.quaternion.w,
+			x: entity.physics._cannon.quaternion.x,
+			y: entity.physics._cannon.quaternion.y,
+			z: entity.physics._cannon.quaternion.z
+		};
+	}
+};
+
+
 
 module.exports = PhysicsSystem;
