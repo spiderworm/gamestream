@@ -12,13 +12,17 @@ PhysicsSystem.prototype.tick = function(ms, entities) {
 		this._updateEntityPhysics(entity);
 		this._updateEntityShape(entity);
 		this._updateEntityPosition(entity);
+		this._updateEntityVelocity(entity);
 		this._updateEntityRotation(entity);
+		this._updateEntityAngularVelocity(entity);
 	}.bind(this));
 	this._cannon.step(1/60, ms/1000, 30);
 	Object.keys(entities).forEach(function(id) {
 		var entity = entities[id];
 		this._applyEntityPosition(entity);
+		this._applyEntityVelocity(entity);
 		this._applyEntityRotation(entity);
+		this._applyEntityAngularVelocity(entity);
 	}.bind(this));
 };
 
@@ -114,6 +118,26 @@ PhysicsSystem.prototype._applyEntityPosition = function(entity) {
 	}
 };
 
+PhysicsSystem.prototype._updateEntityVelocity = function(entity) {
+	if (entity.physics && entity.physics.velocity && entity.physics._cannon) {
+		entity.physics._cannon.velocity.set(
+			entity.physics.velocity.x,
+			entity.physics.velocity.y,
+			entity.physics.velocity.z
+		);
+	}
+};
+
+PhysicsSystem.prototype._applyEntityVelocity = function(entity) {
+	if (entity.physics && entity.physics._cannon) {
+		entity.physics.velocity = {
+			x: entity.physics._cannon.velocity.x,
+			y: entity.physics._cannon.velocity.y,
+			z: entity.physics._cannon.velocity.z
+		};
+	}
+};
+
 PhysicsSystem.prototype._updateEntityRotation = function(entity) {
 	if (entity.physics && entity.physics._cannon) {
 		entity.physics._cannon.quaternion.set(
@@ -132,6 +156,26 @@ PhysicsSystem.prototype._applyEntityRotation = function(entity) {
 			x: entity.physics._cannon.quaternion.x,
 			y: entity.physics._cannon.quaternion.y,
 			z: entity.physics._cannon.quaternion.z
+		};
+	}
+};
+
+PhysicsSystem.prototype._updateEntityAngularVelocity = function(entity) {
+	if (entity.physics && entity.physics.angularVelocity && entity.physics._cannon) {
+		entity.physics._cannon.angularVelocity.set(
+			entity.physics.angularVelocity.x,
+			entity.physics.angularVelocity.y,
+			entity.physics.angularVelocity.z
+		);
+	}
+};
+
+PhysicsSystem.prototype._applyEntityAngularVelocity = function(entity) {
+	if (entity.physics && entity.physics._cannon) {
+		entity.physics.angularVelocity = {
+			x: entity.physics._cannon.angularVelocity.x,
+			y: entity.physics._cannon.angularVelocity.y,
+			z: entity.physics._cannon.angularVelocity.z
 		};
 	}
 };

@@ -18,7 +18,7 @@ function DemoOne() {
 
 	var game2 = new DemoGame(false);
 	this.games.push(game2);
-	game2.stream.setTime((+new Date()) - 1000);
+	game2.stream.setTime((+new Date()) - 0);
 
 	game1.stream.pipe(game2.stream);
 
