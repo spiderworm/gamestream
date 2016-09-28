@@ -19,7 +19,6 @@ function DemoOne() {
 	var game2 = new DemoGame(false);
 	this.games.push(game2);
 	game2.stream.setTime((+new Date()) - 0);
-
 	game1.stream.pipe(game2.stream);
 
 	var tick = (function() { requestAnimationFrame(tick); this.tick(); }).bind(this); tick();
@@ -51,23 +50,25 @@ DemoOne.prototype.render = function() {
 	var row = 0;
 	this.threes.renderer.setSize(totalWidth, totalHeight);
 	this.games.forEach(function(game, i) {
-		var sceneThrees = game.systems.view.threes;
-		col++;
-		if (col > colCount) {
-			col = 1;
-			row++;
+		if (game.systems.view) {
+			var sceneThrees = game.systems.view.threes;
+			col++;
+			if (col > colCount) {
+				col = 1;
+				row++;
+			}
+			this.threes.renderer.clearDepth();
+			this.threes.renderer.setViewport(
+				(col - 1) * width,
+				totalHeight - (row * height),
+				width,
+				height
+			);
+			sceneThrees.camera.aspect = aspect;
+			sceneThrees.camera.updateProjectionMatrix();
+			sceneThrees.camera.lookAt({x: 0, y: 0, z: 0});
+			this.threes.renderer.render(sceneThrees.scene, sceneThrees.camera);
 		}
-		this.threes.renderer.clearDepth();
-		this.threes.renderer.setViewport(
-			(col - 1) * width,
-			totalHeight - (row * height),
-			width,
-			height
-		);
-		sceneThrees.camera.aspect = aspect;
-		sceneThrees.camera.updateProjectionMatrix();
-		sceneThrees.camera.lookAt({x: 0, y: 0, z: 0});
-		this.threes.renderer.render(sceneThrees.scene, sceneThrees.camera);
 	}.bind(this));
 };
 
@@ -82,8 +83,8 @@ DemoOne.prototype._runGame = function() {
 		var cube = new CubeEntity();
 		game.entities[cubeName] = cube;
 
-		setTimeout(addCube, 2000);
-		setTimeout(function() {removeCube(cube);}, 20100);
+		setTimeout(addCube, 200);
+		setTimeout(function() {removeCube(cube);}, 4100);
 	}
 
 	function removeCube(cube) {

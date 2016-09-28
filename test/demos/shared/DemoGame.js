@@ -6,6 +6,7 @@ var now = require('../../../misc/now.js');
 var FloorEntity = require('./entities/FloorEntity.js');
 var GameStream = require('../GameStream.js');
 var Entity = require('./ecs/Entity.js');
+var GarbageCollectorSystem = require('./life/GarbageCollectorSystem.js');
 
 function DemoGame(isHost) {
 	this.isHost = !!isHost;
@@ -14,6 +15,8 @@ function DemoGame(isHost) {
 		physics: new PhysicsSystem(),
 		view: new ViewSystem()
 	};
+
+	this.garbageCollector = new GarbageCollectorSystem();
 
 	this.entities = {
 		floor: new FloorEntity()
@@ -41,6 +44,7 @@ DemoGame.prototype.tick = function() {
 	if (this.isHost) {
 		this.streamState();
 	}
+	this.garbageCollector.tick(delta, this.entities);
 };
 
 DemoGame.prototype.eachSystem = function(callback) {
@@ -62,7 +66,19 @@ DemoGame.prototype.streamState = function() {
 		}
 		return o;
 	}
+
+	function clearDead(update, garbageCollector) {
+		var deadKeys = garbageCollector.flush();
+
+		deadKeys.forEach(function(key) {
+			update[key] = undefined;
+		});
+
+		return update;
+	}
+
 	var update = getState(this.entities);
+	update = clearDead(update, this.garbageCollector);
 	this.stream.updateNow(update);
 };
 
