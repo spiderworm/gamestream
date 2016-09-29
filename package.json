@@ -4,7 +4,8 @@
   "description": "Store, stream, and playback your game state on client and server.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "deploy": "webpack --config webpack-deploy.config.js && gh-pages -d build"
   },
   "repository": {
     "type": "git",
@@ -22,6 +23,9 @@
   },
   "devDependencies": {
     "cannon": "^0.6.2",
+    "copy-webpack-plugin": "^3.0.1",
+    "gh-pages": "^0.11.0",
+    "merge": "^1.2.0",
     "three": "^0.81.2",
     "webpack-dev-server": "^1.16.1"
   }
