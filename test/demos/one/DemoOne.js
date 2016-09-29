@@ -18,8 +18,12 @@ function DemoOne() {
 
 	var game2 = new DemoGame(false);
 	this.games.push(game2);
-	game2.stream.setTime((+new Date()) - 0);
+	game2.stream.setTime((+new Date()) - 500);
 	game1.stream.pipe(game2.stream);
+
+	var game3 = new DemoGame(false);
+	this.games.push(game3);
+	game2.stream.pipe(game3.stream);
 
 	var tick = (function() { requestAnimationFrame(tick); this.tick(); }).bind(this); tick();
 	//setInterval(this.tick.bind(this), 500);

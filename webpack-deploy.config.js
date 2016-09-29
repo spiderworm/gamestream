@@ -6,13 +6,22 @@ var CopyWebpackPlugin = require('copy-webpack-plugin');
 var config = {
 	output: {
 		publicPath: "/gamestream/",
-		filename: "./build/[name].js"
+		filename: "./built/[name].js"
 	},
 	plugins: [
-		new CopyWebpackPlugin([
-			{ from: "./test/demos/index.html", to: "./build/test/demos/index.html" },
-			{ from: "./test/demos/one.html", to: "./build/test/demos/one.html" }
-		])
+		new CopyWebpackPlugin(
+			[
+				{ from: "./*.html", to: "./built/" },
+				{ from: "./**/*.html", to: "./built/" }
+			],
+			{
+				ignore: [
+					'./built/**/*',
+					'./node_modules/*.html',
+					'./node_modules/**/*.html'
+				]
+			}
+		)
 	]
 };
 
