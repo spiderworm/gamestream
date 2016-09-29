@@ -1,8 +1,17 @@
 
 var objectFactory = require('../misc/objectFactory.js');
 
+var clone = objectFactory.clone;
+
 var cloneClean = objectFactory.createFactory({
 	clone: true,
+	deep: true,
+	narrow: false,
+	copyUndefined: false
+});
+
+var applyClean = objectFactory.createFactory({
+	clone: false,
 	deep: true,
 	narrow: false,
 	copyUndefined: false
@@ -38,11 +47,12 @@ State.setPreviousState = function(targetState, previousState) {
 	}
 	this._computeValues(targetState);
 	this._computeReverseUpdate(targetState);
+
 };
 
 State._computeValues = function(targetState) {
-	var values = (targetState.previous ? targetState.previous.values : null) || {};
-	values = cloneClean(values, [targetState.update]);
+	var values = (targetState.previous ? clone(targetState.previous.values) : null) || {};
+	values = applyClean(values, [targetState.update]);
 	targetState.values = values;
 };
 

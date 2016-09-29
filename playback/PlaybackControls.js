@@ -48,7 +48,8 @@ Object.defineProperty(PlaybackControls.prototype, 'time', {
 });
 
 PlaybackControls.prototype.write = function(data) {
-	return this._outputRewrites(data);
+	this._outputRewrites(data);
+	return true;
 };
 
 PlaybackControls.prototype.getState = function() {

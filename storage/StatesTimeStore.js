@@ -3,6 +3,7 @@ var Stream = require('stream');
 var inherits = require('inherits');
 var State = require('../states/State.js');
 var StateZero = require('../states/StateZero.js');
+var now = require('../misc/now.js');
 
 function StatesTimeStore() {
 	this.states = [];

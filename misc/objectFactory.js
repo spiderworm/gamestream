@@ -52,7 +52,7 @@ function ObjectFactory(config) {
 ObjectFactory.prototype.clone = function(a, config) {
 	var b = clone(a);
 	if (!config.copyUndefined) {
-		this.purgeUndefined(a, config);
+		this.purgeUndefined(b, config);
 	}
 	return a;
 };
