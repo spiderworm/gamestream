@@ -88,6 +88,11 @@
 		this.games.push(game3);
 		game2.stream.pipe(game3.stream);
 	
+		var game4 = new DemoGame(false);
+		this.games.push(game4);
+		game3.stream.pipe(game4.stream);
+		game4.stream.setTime((+new Date()) - 5000);
+	
 		var tick = (function() { requestAnimationFrame(tick); this.tick(); }).bind(this); tick();
 		//setInterval(this.tick.bind(this), 500);
 	
