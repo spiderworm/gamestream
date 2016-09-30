@@ -40,19 +40,22 @@
 /******/ 	return __webpack_require__(0);
 /******/ })
 /************************************************************************/
-/******/ ([
-/* 0 */
+/******/ ({
+
+/***/ 0:
 /***/ function(module, exports, __webpack_require__) {
 
-	module.exports = __webpack_require__(1);
+	module.exports = __webpack_require__(144);
 
 
 /***/ },
-/* 1 */
+
+/***/ 144:
 /***/ function(module, exports) {
 
 
 
 /***/ }
-/******/ ]);
+
+/******/ });
 //# sourceMappingURL=demo-index.js.map

@@ -1,0 +1,12 @@
+
+main > article > h1 {
+	margin: 0;
+	padding: .1cm .2cm;
+	font-size: .3cm;
+	color: white;
+	background-color: black;
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+}
