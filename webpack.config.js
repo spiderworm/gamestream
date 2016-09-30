@@ -12,6 +12,9 @@ var config = {
 		],
 		"demo-controls": [
 			"./test/demos/controls.js"
+		],
+		"demo-client-server": [
+			"./test/demos/client-server.js"
 		]
 	},
 	devtool: 'source-map',
