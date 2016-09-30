@@ -1,12 +1,24 @@
 
-var commonConfig = require('./webpack.config.js');
-var merge = require('merge');
+var demosConfig = require('./webpack-demos.config.js');
+var clone = require('./misc/objectFactory.js').clone;
 var CopyWebpackPlugin = require('copy-webpack-plugin');
 
-var config = {
+demosConfig = clone(
+	demosConfig,
+	[
+		{
+			output: {
+				publicPath: "/gamestream/",
+				filename: "./built/test/demos/[name].js"
+			}
+		}
+	]
+);
+
+var webFilesConfig = {
+	entry: "./index.js",
 	output: {
-		publicPath: "/gamestream/",
-		filename: "./built/[name].js"
+		filename: "./built/index.js"
 	},
 	plugins: [
 		new CopyWebpackPlugin(
@@ -21,9 +33,14 @@ var config = {
 				]
 			}
 		)
-	]
+	],
+	devtool: 'source-map',
+	node: {
+		fs: 'empty',
+		tls: 'empty'
+	}
 };
 
-config = merge(commonConfig, config);
+var configs = [demosConfig, webFilesConfig];
 
-module.exports = config;
+module.exports = configs;
