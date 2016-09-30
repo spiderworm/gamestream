@@ -1,16 +1,13 @@
 
-var Stream = require('stream');
+var Duplex = require('../../stream/Duplex.js');
 var inherits = require('inherits');
-var PipeBag = require('../../stream/PipeBag.js');
 var State = require('../../states/State.js');
 
 function StateFactory() {
-	this._pipes = new PipeBag(this);
-	PipeBag.exposeInterface(this, this._pipes);
-	Stream.call(this, { objectMode: true });
+	Duplex.call(this);
 }
 
-inherits(StateFactory, Stream);
+inherits(StateFactory, Duplex);
 
 StateFactory.prototype.write = function(rawStates) {
 	var states = this._createStates(rawStates);

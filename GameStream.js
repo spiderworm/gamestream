@@ -1,8 +1,7 @@
 
-var Stream = require('stream');
+var Duplex = require('./stream/Duplex.js');
 var inherits = require('inherits');
 var now = require('./misc/now.js');
-var PipeBag = require('./stream/PipeBag.js');
 var PlaybackControls = require('./playback/PlaybackControls.js');
 var statesUtil = require('./states/statesUtil.js');
 var CustomWritable = require('./stream/CustomWritable.js');
@@ -24,10 +23,7 @@ function GameStream(config) {
 		return new GameStream(config);
 	}
 
-	Stream.call(this, { objectMode: true });
-
-	this._pipes = new PipeBag(this);
-	PipeBag.exposeInterface(this, this._pipes);
+	Duplex.call(this);
 
 	this._stateFactory = new StateFactory();
 
@@ -51,7 +47,7 @@ function GameStream(config) {
 	this._playback.setTime(now() - this.lag);
 }
 
-inherits(GameStream, Stream);
+inherits(GameStream, Duplex);
 
 Object.defineProperty(GameStream.prototype, 'state', {
 	get: function() { return this.getState(); },
