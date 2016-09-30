@@ -45,7 +45,7 @@
 /***/ function(module, exports, __webpack_require__) {
 
 	
-	var ControlsDemo = __webpack_require__(145);
+	var ControlsDemo = __webpack_require__(144);
 	window.demo = new ControlsDemo();
 
 
@@ -57,9 +57,9 @@
 	
 	var DemoGame = __webpack_require__(3);
 	var GameStream = __webpack_require__(21);
-	var DemoDomNodes = __webpack_require__(138);
+	var DemoDomNodes = __webpack_require__(137);
 	var DemoThrees = __webpack_require__(4);
-	var ConsoleLogger = __webpack_require__(139);
+	var ConsoleLogger = __webpack_require__(138);
 	
 	function Demo() {
 		this.games = [];
@@ -139,8 +139,8 @@
 	var FloorEntity = __webpack_require__(10);
 	var GameStream = __webpack_require__(21);
 	var Entity = __webpack_require__(11);
-	var GarbageCollectorSystem = __webpack_require__(136);
-	var DemoGameStatsView = __webpack_require__(137);
+	var GarbageCollectorSystem = __webpack_require__(135);
+	var DemoGameStatsView = __webpack_require__(136);
 	
 	function DemoGame(isHost, name) {
 		this.isHost = !!isHost;
@@ -56518,9 +56518,6 @@
 	exports.Buffer = Buffer
 	exports.SlowBuffer = SlowBuffer
 	exports.INSPECT_MAX_BYTES = 50
-	Buffer.poolSize = 8192 // not used by this implementation
-	
-	var rootParent = {}
 	
 	/**
 	 * If `Buffer.TYPED_ARRAY_SUPPORT`:
@@ -56538,9 +56535,6 @@
 	 *   - Firefox 4-29 lacks support for adding new properties to `Uint8Array` instances,
 	 *     See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438.
 	 *
-	 *   - Safari 5-7 lacks support for changing the `Object.prototype.constructor` property
-	 *     on objects.
-	 *
 	 *   - Chrome 9-10 is missing the `TypedArray.prototype.subarray` function.
 	 *
 	 *   - IE10 has a broken `TypedArray.prototype.subarray` function which returns arrays of
@@ -56553,14 +56547,16 @@
 	  ? global.TYPED_ARRAY_SUPPORT
 	  : typedArraySupport()
 	
+	/*
+	 * Export kMaxLength after typed array support is determined.
+	 */
+	exports.kMaxLength = kMaxLength()
+	
 	function typedArraySupport () {
-	  function Bar () {}
 	  try {
 	    var arr = new Uint8Array(1)
-	    arr.foo = function () { return 42 }
-	    arr.constructor = Bar
+	    arr.__proto__ = {__proto__: Uint8Array.prototype, foo: function () { return 42 }}
 	    return arr.foo() === 42 && // typed array instances can be augmented
-	        arr.constructor === Bar && // constructor can be set
 	        typeof arr.subarray === 'function' && // chrome 9-10 lack `subarray`
 	        arr.subarray(1, 1).byteLength === 0 // ie10 has broken `subarray`
 	  } catch (e) {
@@ -56574,184 +56570,252 @@
 	    : 0x3fffffff
 	}
 	
-	/**
-	 * Class: Buffer
-	 * =============
-	 *
-	 * The Buffer constructor returns instances of `Uint8Array` that are augmented
-	 * with function properties for all the node `Buffer` API functions. We use
-	 * `Uint8Array` so that square bracket notation works as expected -- it returns
-	 * a single octet.
-	 *
-	 * By augmenting the instances, we can avoid modifying the `Uint8Array`
-	 * prototype.
-	 */
-	function Buffer (arg) {
-	  if (!(this instanceof Buffer)) {
-	    // Avoid going through an ArgumentsAdaptorTrampoline in the common case.
-	    if (arguments.length > 1) return new Buffer(arg, arguments[1])
-	    return new Buffer(arg)
+	function createBuffer (that, length) {
+	  if (kMaxLength() < length) {
+	    throw new RangeError('Invalid typed array length')
+	  }
+	  if (Buffer.TYPED_ARRAY_SUPPORT) {
+	    // Return an augmented `Uint8Array` instance, for best performance
+	    that = new Uint8Array(length)
+	    that.__proto__ = Buffer.prototype
+	  } else {
+	    // Fallback: Return an object instance of the Buffer class
+	    if (that === null) {
+	      that = new Buffer(length)
+	    }
+	    that.length = length
 	  }
 	
-	  if (!Buffer.TYPED_ARRAY_SUPPORT) {
-	    this.length = 0
-	    this.parent = undefined
+	  return that
+	}
+	
+	/**
+	 * The Buffer constructor returns instances of `Uint8Array` that have their
+	 * prototype changed to `Buffer.prototype`. Furthermore, `Buffer` is a subclass of
+	 * `Uint8Array`, so the returned instances will have all the node `Buffer` methods
+	 * and the `Uint8Array` methods. Square bracket notation works as expected -- it
+	 * returns a single octet.
+	 *
+	 * The `Uint8Array` prototype remains unmodified.
+	 */
+	
+	function Buffer (arg, encodingOrOffset, length) {
+	  if (!Buffer.TYPED_ARRAY_SUPPORT && !(this instanceof Buffer)) {
+	    return new Buffer(arg, encodingOrOffset, length)
 	  }
 	
 	  // Common case.
 	  if (typeof arg === 'number') {
-	    return fromNumber(this, arg)
+	    if (typeof encodingOrOffset === 'string') {
+	      throw new Error(
+	        'If encoding is specified then the first argument must be a string'
+	      )
+	    }
+	    return allocUnsafe(this, arg)
 	  }
-	
-	  // Slightly less common case.
-	  if (typeof arg === 'string') {
-	    return fromString(this, arg, arguments.length > 1 ? arguments[1] : 'utf8')
-	  }
-	
-	  // Unusual.
-	  return fromObject(this, arg)
+	  return from(this, arg, encodingOrOffset, length)
 	}
 	
-	function fromNumber (that, length) {
-	  that = allocate(that, length < 0 ? 0 : checked(length) | 0)
+	Buffer.poolSize = 8192 // not used by this implementation
+	
+	// TODO: Legacy, not needed anymore. Remove in next major version.
+	Buffer._augment = function (arr) {
+	  arr.__proto__ = Buffer.prototype
+	  return arr
+	}
+	
+	function from (that, value, encodingOrOffset, length) {
+	  if (typeof value === 'number') {
+	    throw new TypeError('"value" argument must not be a number')
+	  }
+	
+	  if (typeof ArrayBuffer !== 'undefined' && value instanceof ArrayBuffer) {
+	    return fromArrayBuffer(that, value, encodingOrOffset, length)
+	  }
+	
+	  if (typeof value === 'string') {
+	    return fromString(that, value, encodingOrOffset)
+	  }
+	
+	  return fromObject(that, value)
+	}
+	
+	/**
+	 * Functionally equivalent to Buffer(arg, encoding) but throws a TypeError
+	 * if value is a number.
+	 * Buffer.from(str[, encoding])
+	 * Buffer.from(array)
+	 * Buffer.from(buffer)
+	 * Buffer.from(arrayBuffer[, byteOffset[, length]])
+	 **/
+	Buffer.from = function (value, encodingOrOffset, length) {
+	  return from(null, value, encodingOrOffset, length)
+	}
+	
+	if (Buffer.TYPED_ARRAY_SUPPORT) {
+	  Buffer.prototype.__proto__ = Uint8Array.prototype
+	  Buffer.__proto__ = Uint8Array
+	  if (typeof Symbol !== 'undefined' && Symbol.species &&
+	      Buffer[Symbol.species] === Buffer) {
+	    // Fix subarray() in ES2016. See: https://github.com/feross/buffer/pull/97
+	    Object.defineProperty(Buffer, Symbol.species, {
+	      value: null,
+	      configurable: true
+	    })
+	  }
+	}
+	
+	function assertSize (size) {
+	  if (typeof size !== 'number') {
+	    throw new TypeError('"size" argument must be a number')
+	  } else if (size < 0) {
+	    throw new RangeError('"size" argument must not be negative')
+	  }
+	}
+	
+	function alloc (that, size, fill, encoding) {
+	  assertSize(size)
+	  if (size <= 0) {
+	    return createBuffer(that, size)
+	  }
+	  if (fill !== undefined) {
+	    // Only pay attention to encoding if it's a string. This
+	    // prevents accidentally sending in a number that would
+	    // be interpretted as a start offset.
+	    return typeof encoding === 'string'
+	      ? createBuffer(that, size).fill(fill, encoding)
+	      : createBuffer(that, size).fill(fill)
+	  }
+	  return createBuffer(that, size)
+	}
+	
+	/**
+	 * Creates a new filled Buffer instance.
+	 * alloc(size[, fill[, encoding]])
+	 **/
+	Buffer.alloc = function (size, fill, encoding) {
+	  return alloc(null, size, fill, encoding)
+	}
+	
+	function allocUnsafe (that, size) {
+	  assertSize(size)
+	  that = createBuffer(that, size < 0 ? 0 : checked(size) | 0)
 	  if (!Buffer.TYPED_ARRAY_SUPPORT) {
-	    for (var i = 0; i < length; i++) {
+	    for (var i = 0; i < size; ++i) {
 	      that[i] = 0
 	    }
 	  }
 	  return that
 	}
 	
+	/**
+	 * Equivalent to Buffer(num), by default creates a non-zero-filled Buffer instance.
+	 * */
+	Buffer.allocUnsafe = function (size) {
+	  return allocUnsafe(null, size)
+	}
+	/**
+	 * Equivalent to SlowBuffer(num), by default creates a non-zero-filled Buffer instance.
+	 */
+	Buffer.allocUnsafeSlow = function (size) {
+	  return allocUnsafe(null, size)
+	}
+	
 	function fromString (that, string, encoding) {
-	  if (typeof encoding !== 'string' || encoding === '') encoding = 'utf8'
+	  if (typeof encoding !== 'string' || encoding === '') {
+	    encoding = 'utf8'
+	  }
 	
-	  // Assumption: byteLength() return value is always < kMaxLength.
+	  if (!Buffer.isEncoding(encoding)) {
+	    throw new TypeError('"encoding" must be a valid string encoding')
+	  }
+	
 	  var length = byteLength(string, encoding) | 0
-	  that = allocate(that, length)
+	  that = createBuffer(that, length)
 	
-	  that.write(string, encoding)
-	  return that
-	}
+	  var actual = that.write(string, encoding)
 	
-	function fromObject (that, object) {
-	  if (Buffer.isBuffer(object)) return fromBuffer(that, object)
-	
-	  if (isArray(object)) return fromArray(that, object)
-	
-	  if (object == null) {
-	    throw new TypeError('must start with number, buffer, array or string')
+	  if (actual !== length) {
+	    // Writing a hex string, for example, that contains invalid characters will
+	    // cause everything after the first invalid character to be ignored. (e.g.
+	    // 'abxxcd' will be treated as 'ab')
+	    that = that.slice(0, actual)
 	  }
 	
-	  if (typeof ArrayBuffer !== 'undefined') {
-	    if (object.buffer instanceof ArrayBuffer) {
-	      return fromTypedArray(that, object)
-	    }
-	    if (object instanceof ArrayBuffer) {
-	      return fromArrayBuffer(that, object)
-	    }
-	  }
-	
-	  if (object.length) return fromArrayLike(that, object)
-	
-	  return fromJsonObject(that, object)
-	}
-	
-	function fromBuffer (that, buffer) {
-	  var length = checked(buffer.length) | 0
-	  that = allocate(that, length)
-	  buffer.copy(that, 0, 0, length)
-	  return that
-	}
-	
-	function fromArray (that, array) {
-	  var length = checked(array.length) | 0
-	  that = allocate(that, length)
-	  for (var i = 0; i < length; i += 1) {
-	    that[i] = array[i] & 255
-	  }
-	  return that
-	}
-	
-	// Duplicate of fromArray() to keep fromArray() monomorphic.
-	function fromTypedArray (that, array) {
-	  var length = checked(array.length) | 0
-	  that = allocate(that, length)
-	  // Truncating the elements is probably not what people expect from typed
-	  // arrays with BYTES_PER_ELEMENT > 1 but it's compatible with the behavior
-	  // of the old Buffer constructor.
-	  for (var i = 0; i < length; i += 1) {
-	    that[i] = array[i] & 255
-	  }
-	  return that
-	}
-	
-	function fromArrayBuffer (that, array) {
-	  if (Buffer.TYPED_ARRAY_SUPPORT) {
-	    // Return an augmented `Uint8Array` instance, for best performance
-	    array.byteLength
-	    that = Buffer._augment(new Uint8Array(array))
-	  } else {
-	    // Fallback: Return an object instance of the Buffer class
-	    that = fromTypedArray(that, new Uint8Array(array))
-	  }
 	  return that
 	}
 	
 	function fromArrayLike (that, array) {
-	  var length = checked(array.length) | 0
-	  that = allocate(that, length)
+	  var length = array.length < 0 ? 0 : checked(array.length) | 0
+	  that = createBuffer(that, length)
 	  for (var i = 0; i < length; i += 1) {
 	    that[i] = array[i] & 255
 	  }
 	  return that
 	}
 	
-	// Deserialize { type: 'Buffer', data: [1,2,3,...] } into a Buffer object.
-	// Returns a zero-length buffer for inputs that don't conform to the spec.
-	function fromJsonObject (that, object) {
-	  var array
-	  var length = 0
+	function fromArrayBuffer (that, array, byteOffset, length) {
+	  array.byteLength // this throws if `array` is not a valid ArrayBuffer
 	
-	  if (object.type === 'Buffer' && isArray(object.data)) {
-	    array = object.data
-	    length = checked(array.length) | 0
+	  if (byteOffset < 0 || array.byteLength < byteOffset) {
+	    throw new RangeError('\'offset\' is out of bounds')
 	  }
-	  that = allocate(that, length)
 	
-	  for (var i = 0; i < length; i += 1) {
-	    that[i] = array[i] & 255
+	  if (array.byteLength < byteOffset + (length || 0)) {
+	    throw new RangeError('\'length\' is out of bounds')
 	  }
-	  return that
-	}
 	
-	if (Buffer.TYPED_ARRAY_SUPPORT) {
-	  Buffer.prototype.__proto__ = Uint8Array.prototype
-	  Buffer.__proto__ = Uint8Array
-	} else {
-	  // pre-set for values that may exist in the future
-	  Buffer.prototype.length = undefined
-	  Buffer.prototype.parent = undefined
-	}
+	  if (byteOffset === undefined && length === undefined) {
+	    array = new Uint8Array(array)
+	  } else if (length === undefined) {
+	    array = new Uint8Array(array, byteOffset)
+	  } else {
+	    array = new Uint8Array(array, byteOffset, length)
+	  }
 	
-	function allocate (that, length) {
 	  if (Buffer.TYPED_ARRAY_SUPPORT) {
 	    // Return an augmented `Uint8Array` instance, for best performance
-	    that = Buffer._augment(new Uint8Array(length))
+	    that = array
 	    that.__proto__ = Buffer.prototype
 	  } else {
 	    // Fallback: Return an object instance of the Buffer class
-	    that.length = length
-	    that._isBuffer = true
+	    that = fromArrayLike(that, array)
 	  }
-	
-	  var fromPool = length !== 0 && length <= Buffer.poolSize >>> 1
-	  if (fromPool) that.parent = rootParent
-	
 	  return that
 	}
 	
+	function fromObject (that, obj) {
+	  if (Buffer.isBuffer(obj)) {
+	    var len = checked(obj.length) | 0
+	    that = createBuffer(that, len)
+	
+	    if (that.length === 0) {
+	      return that
+	    }
+	
+	    obj.copy(that, 0, 0, len)
+	    return that
+	  }
+	
+	  if (obj) {
+	    if ((typeof ArrayBuffer !== 'undefined' &&
+	        obj.buffer instanceof ArrayBuffer) || 'length' in obj) {
+	      if (typeof obj.length !== 'number' || isnan(obj.length)) {
+	        return createBuffer(that, 0)
+	      }
+	      return fromArrayLike(that, obj)
+	    }
+	
+	    if (obj.type === 'Buffer' && isArray(obj.data)) {
+	      return fromArrayLike(that, obj.data)
+	    }
+	  }
+	
+	  throw new TypeError('First argument must be a string, Buffer, ArrayBuffer, Array, or array-like object.')
+	}
+	
 	function checked (length) {
-	  // Note: cannot use `length < kMaxLength` here because that fails when
+	  // Note: cannot use `length < kMaxLength()` here because that fails when
 	  // length is NaN (which is otherwise coerced to zero.)
 	  if (length >= kMaxLength()) {
 	    throw new RangeError('Attempt to allocate Buffer larger than maximum ' +
@@ -56760,12 +56824,11 @@
 	  return length | 0
 	}
 	
-	function SlowBuffer (subject, encoding) {
-	  if (!(this instanceof SlowBuffer)) return new SlowBuffer(subject, encoding)
-	
-	  var buf = new Buffer(subject, encoding)
-	  delete buf.parent
-	  return buf
+	function SlowBuffer (length) {
+	  if (+length != length) { // eslint-disable-line eqeqeq
+	    length = 0
+	  }
+	  return Buffer.alloc(+length)
 	}
 	
 	Buffer.isBuffer = function isBuffer (b) {
@@ -56782,17 +56845,12 @@
 	  var x = a.length
 	  var y = b.length
 	
-	  var i = 0
-	  var len = Math.min(x, y)
-	  while (i < len) {
-	    if (a[i] !== b[i]) break
-	
-	    ++i
-	  }
-	
-	  if (i !== len) {
-	    x = a[i]
-	    y = b[i]
+	  for (var i = 0, len = Math.min(x, y); i < len; ++i) {
+	    if (a[i] !== b[i]) {
+	      x = a[i]
+	      y = b[i]
+	      break
+	    }
 	  }
 	
 	  if (x < y) return -1
@@ -56806,9 +56864,9 @@
 	    case 'utf8':
 	    case 'utf-8':
 	    case 'ascii':
+	    case 'latin1':
 	    case 'binary':
 	    case 'base64':
-	    case 'raw':
 	    case 'ucs2':
 	    case 'ucs-2':
 	    case 'utf16le':
@@ -56820,32 +56878,46 @@
 	}
 	
 	Buffer.concat = function concat (list, length) {
-	  if (!isArray(list)) throw new TypeError('list argument must be an Array of Buffers.')
+	  if (!isArray(list)) {
+	    throw new TypeError('"list" argument must be an Array of Buffers')
+	  }
 	
 	  if (list.length === 0) {
-	    return new Buffer(0)
+	    return Buffer.alloc(0)
 	  }
 	
 	  var i
 	  if (length === undefined) {
 	    length = 0
-	    for (i = 0; i < list.length; i++) {
+	    for (i = 0; i < list.length; ++i) {
 	      length += list[i].length
 	    }
 	  }
 	
-	  var buf = new Buffer(length)
+	  var buffer = Buffer.allocUnsafe(length)
 	  var pos = 0
-	  for (i = 0; i < list.length; i++) {
-	    var item = list[i]
-	    item.copy(buf, pos)
-	    pos += item.length
+	  for (i = 0; i < list.length; ++i) {
+	    var buf = list[i]
+	    if (!Buffer.isBuffer(buf)) {
+	      throw new TypeError('"list" argument must be an Array of Buffers')
+	    }
+	    buf.copy(buffer, pos)
+	    pos += buf.length
 	  }
-	  return buf
+	  return buffer
 	}
 	
 	function byteLength (string, encoding) {
-	  if (typeof string !== 'string') string = '' + string
+	  if (Buffer.isBuffer(string)) {
+	    return string.length
+	  }
+	  if (typeof ArrayBuffer !== 'undefined' && typeof ArrayBuffer.isView === 'function' &&
+	      (ArrayBuffer.isView(string) || string instanceof ArrayBuffer)) {
+	    return string.byteLength
+	  }
+	  if (typeof string !== 'string') {
+	    string = '' + string
+	  }
 	
 	  var len = string.length
 	  if (len === 0) return 0
@@ -56855,13 +56927,12 @@
 	  for (;;) {
 	    switch (encoding) {
 	      case 'ascii':
+	      case 'latin1':
 	      case 'binary':
-	      // Deprecated
-	      case 'raw':
-	      case 'raws':
 	        return len
 	      case 'utf8':
 	      case 'utf-8':
+	      case undefined:
 	        return utf8ToBytes(string).length
 	      case 'ucs2':
 	      case 'ucs-2':
@@ -56884,13 +56955,39 @@
 	function slowToString (encoding, start, end) {
 	  var loweredCase = false
 	
-	  start = start | 0
-	  end = end === undefined || end === Infinity ? this.length : end | 0
+	  // No need to verify that "this.length <= MAX_UINT32" since it's a read-only
+	  // property of a typed array.
+	
+	  // This behaves neither like String nor Uint8Array in that we set start/end
+	  // to their upper/lower bounds if the value passed is out of range.
+	  // undefined is handled specially as per ECMA-262 6th Edition,
+	  // Section 13.3.3.7 Runtime Semantics: KeyedBindingInitialization.
+	  if (start === undefined || start < 0) {
+	    start = 0
+	  }
+	  // Return early if start > this.length. Done here to prevent potential uint32
+	  // coercion fail below.
+	  if (start > this.length) {
+	    return ''
+	  }
+	
+	  if (end === undefined || end > this.length) {
+	    end = this.length
+	  }
+	
+	  if (end <= 0) {
+	    return ''
+	  }
+	
+	  // Force coersion to uint32. This will also coerce falsey/NaN values to 0.
+	  end >>>= 0
+	  start >>>= 0
+	
+	  if (end <= start) {
+	    return ''
+	  }
 	
 	  if (!encoding) encoding = 'utf8'
-	  if (start < 0) start = 0
-	  if (end > this.length) end = this.length
-	  if (end <= start) return ''
 	
 	  while (true) {
 	    switch (encoding) {
@@ -56904,8 +57001,9 @@
 	      case 'ascii':
 	        return asciiSlice(this, start, end)
 	
+	      case 'latin1':
 	      case 'binary':
-	        return binarySlice(this, start, end)
+	        return latin1Slice(this, start, end)
 	
 	      case 'base64':
 	        return base64Slice(this, start, end)
@@ -56922,6 +57020,53 @@
 	        loweredCase = true
 	    }
 	  }
+	}
+	
+	// The property is used by `Buffer.isBuffer` and `is-buffer` (in Safari 5-7) to detect
+	// Buffer instances.
+	Buffer.prototype._isBuffer = true
+	
+	function swap (b, n, m) {
+	  var i = b[n]
+	  b[n] = b[m]
+	  b[m] = i
+	}
+	
+	Buffer.prototype.swap16 = function swap16 () {
+	  var len = this.length
+	  if (len % 2 !== 0) {
+	    throw new RangeError('Buffer size must be a multiple of 16-bits')
+	  }
+	  for (var i = 0; i < len; i += 2) {
+	    swap(this, i, i + 1)
+	  }
+	  return this
+	}
+	
+	Buffer.prototype.swap32 = function swap32 () {
+	  var len = this.length
+	  if (len % 4 !== 0) {
+	    throw new RangeError('Buffer size must be a multiple of 32-bits')
+	  }
+	  for (var i = 0; i < len; i += 4) {
+	    swap(this, i, i + 3)
+	    swap(this, i + 1, i + 2)
+	  }
+	  return this
+	}
+	
+	Buffer.prototype.swap64 = function swap64 () {
+	  var len = this.length
+	  if (len % 8 !== 0) {
+	    throw new RangeError('Buffer size must be a multiple of 64-bits')
+	  }
+	  for (var i = 0; i < len; i += 8) {
+	    swap(this, i, i + 7)
+	    swap(this, i + 1, i + 6)
+	    swap(this, i + 2, i + 5)
+	    swap(this, i + 3, i + 4)
+	  }
+	  return this
 	}
 	
 	Buffer.prototype.toString = function toString () {
@@ -56947,63 +57092,197 @@
 	  return '<Buffer ' + str + '>'
 	}
 	
-	Buffer.prototype.compare = function compare (b) {
-	  if (!Buffer.isBuffer(b)) throw new TypeError('Argument must be a Buffer')
-	  if (this === b) return 0
-	  return Buffer.compare(this, b)
+	Buffer.prototype.compare = function compare (target, start, end, thisStart, thisEnd) {
+	  if (!Buffer.isBuffer(target)) {
+	    throw new TypeError('Argument must be a Buffer')
+	  }
+	
+	  if (start === undefined) {
+	    start = 0
+	  }
+	  if (end === undefined) {
+	    end = target ? target.length : 0
+	  }
+	  if (thisStart === undefined) {
+	    thisStart = 0
+	  }
+	  if (thisEnd === undefined) {
+	    thisEnd = this.length
+	  }
+	
+	  if (start < 0 || end > target.length || thisStart < 0 || thisEnd > this.length) {
+	    throw new RangeError('out of range index')
+	  }
+	
+	  if (thisStart >= thisEnd && start >= end) {
+	    return 0
+	  }
+	  if (thisStart >= thisEnd) {
+	    return -1
+	  }
+	  if (start >= end) {
+	    return 1
+	  }
+	
+	  start >>>= 0
+	  end >>>= 0
+	  thisStart >>>= 0
+	  thisEnd >>>= 0
+	
+	  if (this === target) return 0
+	
+	  var x = thisEnd - thisStart
+	  var y = end - start
+	  var len = Math.min(x, y)
+	
+	  var thisCopy = this.slice(thisStart, thisEnd)
+	  var targetCopy = target.slice(start, end)
+	
+	  for (var i = 0; i < len; ++i) {
+	    if (thisCopy[i] !== targetCopy[i]) {
+	      x = thisCopy[i]
+	      y = targetCopy[i]
+	      break
+	    }
+	  }
+	
+	  if (x < y) return -1
+	  if (y < x) return 1
+	  return 0
 	}
 	
-	Buffer.prototype.indexOf = function indexOf (val, byteOffset) {
-	  if (byteOffset > 0x7fffffff) byteOffset = 0x7fffffff
-	  else if (byteOffset < -0x80000000) byteOffset = -0x80000000
-	  byteOffset >>= 0
+	// Finds either the first index of `val` in `buffer` at offset >= `byteOffset`,
+	// OR the last index of `val` in `buffer` at offset <= `byteOffset`.
+	//
+	// Arguments:
+	// - buffer - a Buffer to search
+	// - val - a string, Buffer, or number
+	// - byteOffset - an index into `buffer`; will be clamped to an int32
+	// - encoding - an optional encoding, relevant is val is a string
+	// - dir - true for indexOf, false for lastIndexOf
+	function bidirectionalIndexOf (buffer, val, byteOffset, encoding, dir) {
+	  // Empty buffer means no match
+	  if (buffer.length === 0) return -1
 	
-	  if (this.length === 0) return -1
-	  if (byteOffset >= this.length) return -1
+	  // Normalize byteOffset
+	  if (typeof byteOffset === 'string') {
+	    encoding = byteOffset
+	    byteOffset = 0
+	  } else if (byteOffset > 0x7fffffff) {
+	    byteOffset = 0x7fffffff
+	  } else if (byteOffset < -0x80000000) {
+	    byteOffset = -0x80000000
+	  }
+	  byteOffset = +byteOffset  // Coerce to Number.
+	  if (isNaN(byteOffset)) {
+	    // byteOffset: it it's undefined, null, NaN, "foo", etc, search whole buffer
+	    byteOffset = dir ? 0 : (buffer.length - 1)
+	  }
 	
-	  // Negative offsets start from the end of the buffer
-	  if (byteOffset < 0) byteOffset = Math.max(this.length + byteOffset, 0)
+	  // Normalize byteOffset: negative offsets start from the end of the buffer
+	  if (byteOffset < 0) byteOffset = buffer.length + byteOffset
+	  if (byteOffset >= buffer.length) {
+	    if (dir) return -1
+	    else byteOffset = buffer.length - 1
+	  } else if (byteOffset < 0) {
+	    if (dir) byteOffset = 0
+	    else return -1
+	  }
 	
+	  // Normalize val
 	  if (typeof val === 'string') {
-	    if (val.length === 0) return -1 // special case: looking for empty string always fails
-	    return String.prototype.indexOf.call(this, val, byteOffset)
-	  }
-	  if (Buffer.isBuffer(val)) {
-	    return arrayIndexOf(this, val, byteOffset)
-	  }
-	  if (typeof val === 'number') {
-	    if (Buffer.TYPED_ARRAY_SUPPORT && Uint8Array.prototype.indexOf === 'function') {
-	      return Uint8Array.prototype.indexOf.call(this, val, byteOffset)
-	    }
-	    return arrayIndexOf(this, [ val ], byteOffset)
+	    val = Buffer.from(val, encoding)
 	  }
 	
-	  function arrayIndexOf (arr, val, byteOffset) {
-	    var foundIndex = -1
-	    for (var i = 0; byteOffset + i < arr.length; i++) {
-	      if (arr[byteOffset + i] === val[foundIndex === -1 ? 0 : i - foundIndex]) {
-	        if (foundIndex === -1) foundIndex = i
-	        if (i - foundIndex + 1 === val.length) return byteOffset + foundIndex
+	  // Finally, search either indexOf (if dir is true) or lastIndexOf
+	  if (Buffer.isBuffer(val)) {
+	    // Special case: looking for empty string/buffer always fails
+	    if (val.length === 0) {
+	      return -1
+	    }
+	    return arrayIndexOf(buffer, val, byteOffset, encoding, dir)
+	  } else if (typeof val === 'number') {
+	    val = val & 0xFF // Search for a byte value [0-255]
+	    if (Buffer.TYPED_ARRAY_SUPPORT &&
+	        typeof Uint8Array.prototype.indexOf === 'function') {
+	      if (dir) {
+	        return Uint8Array.prototype.indexOf.call(buffer, val, byteOffset)
 	      } else {
-	        foundIndex = -1
+	        return Uint8Array.prototype.lastIndexOf.call(buffer, val, byteOffset)
 	      }
 	    }
-	    return -1
+	    return arrayIndexOf(buffer, [ val ], byteOffset, encoding, dir)
 	  }
 	
 	  throw new TypeError('val must be string, number or Buffer')
 	}
 	
-	// `get` is deprecated
-	Buffer.prototype.get = function get (offset) {
-	  console.log('.get() is deprecated. Access using array indexes instead.')
-	  return this.readUInt8(offset)
+	function arrayIndexOf (arr, val, byteOffset, encoding, dir) {
+	  var indexSize = 1
+	  var arrLength = arr.length
+	  var valLength = val.length
+	
+	  if (encoding !== undefined) {
+	    encoding = String(encoding).toLowerCase()
+	    if (encoding === 'ucs2' || encoding === 'ucs-2' ||
+	        encoding === 'utf16le' || encoding === 'utf-16le') {
+	      if (arr.length < 2 || val.length < 2) {
+	        return -1
+	      }
+	      indexSize = 2
+	      arrLength /= 2
+	      valLength /= 2
+	      byteOffset /= 2
+	    }
+	  }
+	
+	  function read (buf, i) {
+	    if (indexSize === 1) {
+	      return buf[i]
+	    } else {
+	      return buf.readUInt16BE(i * indexSize)
+	    }
+	  }
+	
+	  var i
+	  if (dir) {
+	    var foundIndex = -1
+	    for (i = byteOffset; i < arrLength; i++) {
+	      if (read(arr, i) === read(val, foundIndex === -1 ? 0 : i - foundIndex)) {
+	        if (foundIndex === -1) foundIndex = i
+	        if (i - foundIndex + 1 === valLength) return foundIndex * indexSize
+	      } else {
+	        if (foundIndex !== -1) i -= i - foundIndex
+	        foundIndex = -1
+	      }
+	    }
+	  } else {
+	    if (byteOffset + valLength > arrLength) byteOffset = arrLength - valLength
+	    for (i = byteOffset; i >= 0; i--) {
+	      var found = true
+	      for (var j = 0; j < valLength; j++) {
+	        if (read(arr, i + j) !== read(val, j)) {
+	          found = false
+	          break
+	        }
+	      }
+	      if (found) return i
+	    }
+	  }
+	
+	  return -1
 	}
 	
-	// `set` is deprecated
-	Buffer.prototype.set = function set (v, offset) {
-	  console.log('.set() is deprecated. Access using array indexes instead.')
-	  return this.writeUInt8(v, offset)
+	Buffer.prototype.includes = function includes (val, byteOffset, encoding) {
+	  return this.indexOf(val, byteOffset, encoding) !== -1
+	}
+	
+	Buffer.prototype.indexOf = function indexOf (val, byteOffset, encoding) {
+	  return bidirectionalIndexOf(this, val, byteOffset, encoding, true)
+	}
+	
+	Buffer.prototype.lastIndexOf = function lastIndexOf (val, byteOffset, encoding) {
+	  return bidirectionalIndexOf(this, val, byteOffset, encoding, false)
 	}
 	
 	function hexWrite (buf, string, offset, length) {
@@ -57020,14 +57299,14 @@
 	
 	  // must be an even number of digits
 	  var strLen = string.length
-	  if (strLen % 2 !== 0) throw new Error('Invalid hex string')
+	  if (strLen % 2 !== 0) throw new TypeError('Invalid hex string')
 	
 	  if (length > strLen / 2) {
 	    length = strLen / 2
 	  }
-	  for (var i = 0; i < length; i++) {
+	  for (var i = 0; i < length; ++i) {
 	    var parsed = parseInt(string.substr(i * 2, 2), 16)
-	    if (isNaN(parsed)) throw new Error('Invalid hex string')
+	    if (isNaN(parsed)) return i
 	    buf[offset + i] = parsed
 	  }
 	  return i
@@ -57041,7 +57320,7 @@
 	  return blitBuffer(asciiToBytes(string), buf, offset, length)
 	}
 	
-	function binaryWrite (buf, string, offset, length) {
+	function latin1Write (buf, string, offset, length) {
 	  return asciiWrite(buf, string, offset, length)
 	}
 	
@@ -57076,17 +57355,16 @@
 	    }
 	  // legacy write(string, encoding, offset, length) - remove in v0.13
 	  } else {
-	    var swap = encoding
-	    encoding = offset
-	    offset = length | 0
-	    length = swap
+	    throw new Error(
+	      'Buffer.write(string, encoding, offset[, length]) is no longer supported'
+	    )
 	  }
 	
 	  var remaining = this.length - offset
 	  if (length === undefined || length > remaining) length = remaining
 	
 	  if ((string.length > 0 && (length < 0 || offset < 0)) || offset > this.length) {
-	    throw new RangeError('attempt to write outside buffer bounds')
+	    throw new RangeError('Attempt to write outside buffer bounds')
 	  }
 	
 	  if (!encoding) encoding = 'utf8'
@@ -57104,8 +57382,9 @@
 	      case 'ascii':
 	        return asciiWrite(this, string, offset, length)
 	
+	      case 'latin1':
 	      case 'binary':
-	        return binaryWrite(this, string, offset, length)
+	        return latin1Write(this, string, offset, length)
 	
 	      case 'base64':
 	        // Warning: maxLength not taken into account in base64Write
@@ -57240,17 +57519,17 @@
 	  var ret = ''
 	  end = Math.min(buf.length, end)
 	
-	  for (var i = start; i < end; i++) {
+	  for (var i = start; i < end; ++i) {
 	    ret += String.fromCharCode(buf[i] & 0x7F)
 	  }
 	  return ret
 	}
 	
-	function binarySlice (buf, start, end) {
+	function latin1Slice (buf, start, end) {
 	  var ret = ''
 	  end = Math.min(buf.length, end)
 	
-	  for (var i = start; i < end; i++) {
+	  for (var i = start; i < end; ++i) {
 	    ret += String.fromCharCode(buf[i])
 	  }
 	  return ret
@@ -57263,7 +57542,7 @@
 	  if (!end || end < 0 || end > len) end = len
 	
 	  var out = ''
-	  for (var i = start; i < end; i++) {
+	  for (var i = start; i < end; ++i) {
 	    out += toHex(buf[i])
 	  }
 	  return out
@@ -57301,16 +57580,15 @@
 	
 	  var newBuf
 	  if (Buffer.TYPED_ARRAY_SUPPORT) {
-	    newBuf = Buffer._augment(this.subarray(start, end))
+	    newBuf = this.subarray(start, end)
+	    newBuf.__proto__ = Buffer.prototype
 	  } else {
 	    var sliceLen = end - start
 	    newBuf = new Buffer(sliceLen, undefined)
-	    for (var i = 0; i < sliceLen; i++) {
+	    for (var i = 0; i < sliceLen; ++i) {
 	      newBuf[i] = this[i + start]
 	    }
 	  }
-	
-	  if (newBuf.length) newBuf.parent = this.parent || this
 	
 	  return newBuf
 	}
@@ -57480,16 +57758,19 @@
 	}
 	
 	function checkInt (buf, value, offset, ext, max, min) {
-	  if (!Buffer.isBuffer(buf)) throw new TypeError('buffer must be a Buffer instance')
-	  if (value > max || value < min) throw new RangeError('value is out of bounds')
-	  if (offset + ext > buf.length) throw new RangeError('index out of range')
+	  if (!Buffer.isBuffer(buf)) throw new TypeError('"buffer" argument must be a Buffer instance')
+	  if (value > max || value < min) throw new RangeError('"value" argument is out of bounds')
+	  if (offset + ext > buf.length) throw new RangeError('Index out of range')
 	}
 	
 	Buffer.prototype.writeUIntLE = function writeUIntLE (value, offset, byteLength, noAssert) {
 	  value = +value
 	  offset = offset | 0
 	  byteLength = byteLength | 0
-	  if (!noAssert) checkInt(this, value, offset, byteLength, Math.pow(2, 8 * byteLength), 0)
+	  if (!noAssert) {
+	    var maxBytes = Math.pow(2, 8 * byteLength) - 1
+	    checkInt(this, value, offset, byteLength, maxBytes, 0)
+	  }
 	
 	  var mul = 1
 	  var i = 0
@@ -57505,7 +57786,10 @@
 	  value = +value
 	  offset = offset | 0
 	  byteLength = byteLength | 0
-	  if (!noAssert) checkInt(this, value, offset, byteLength, Math.pow(2, 8 * byteLength), 0)
+	  if (!noAssert) {
+	    var maxBytes = Math.pow(2, 8 * byteLength) - 1
+	    checkInt(this, value, offset, byteLength, maxBytes, 0)
+	  }
 	
 	  var i = byteLength - 1
 	  var mul = 1
@@ -57528,7 +57812,7 @@
 	
 	function objectWriteUInt16 (buf, value, offset, littleEndian) {
 	  if (value < 0) value = 0xffff + value + 1
-	  for (var i = 0, j = Math.min(buf.length - offset, 2); i < j; i++) {
+	  for (var i = 0, j = Math.min(buf.length - offset, 2); i < j; ++i) {
 	    buf[offset + i] = (value & (0xff << (8 * (littleEndian ? i : 1 - i)))) >>>
 	      (littleEndian ? i : 1 - i) * 8
 	  }
@@ -57562,7 +57846,7 @@
 	
 	function objectWriteUInt32 (buf, value, offset, littleEndian) {
 	  if (value < 0) value = 0xffffffff + value + 1
-	  for (var i = 0, j = Math.min(buf.length - offset, 4); i < j; i++) {
+	  for (var i = 0, j = Math.min(buf.length - offset, 4); i < j; ++i) {
 	    buf[offset + i] = (value >>> (littleEndian ? i : 3 - i) * 8) & 0xff
 	  }
 	}
@@ -57608,9 +57892,12 @@
 	
 	  var i = 0
 	  var mul = 1
-	  var sub = value < 0 ? 1 : 0
+	  var sub = 0
 	  this[offset] = value & 0xFF
 	  while (++i < byteLength && (mul *= 0x100)) {
+	    if (value < 0 && sub === 0 && this[offset + i - 1] !== 0) {
+	      sub = 1
+	    }
 	    this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
 	  }
 	
@@ -57628,9 +57915,12 @@
 	
 	  var i = byteLength - 1
 	  var mul = 1
-	  var sub = value < 0 ? 1 : 0
+	  var sub = 0
 	  this[offset + i] = value & 0xFF
 	  while (--i >= 0 && (mul *= 0x100)) {
+	    if (value < 0 && sub === 0 && this[offset + i + 1] !== 0) {
+	      sub = 1
+	    }
 	    this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
 	  }
 	
@@ -57705,9 +57995,8 @@
 	}
 	
 	function checkIEEE754 (buf, value, offset, ext, max, min) {
-	  if (value > max || value < min) throw new RangeError('value is out of bounds')
-	  if (offset + ext > buf.length) throw new RangeError('index out of range')
-	  if (offset < 0) throw new RangeError('index out of range')
+	  if (offset + ext > buf.length) throw new RangeError('Index out of range')
+	  if (offset < 0) throw new RangeError('Index out of range')
 	}
 	
 	function writeFloat (buf, value, offset, littleEndian, noAssert) {
@@ -57772,142 +58061,90 @@
 	
 	  if (this === target && start < targetStart && targetStart < end) {
 	    // descending copy from end
-	    for (i = len - 1; i >= 0; i--) {
+	    for (i = len - 1; i >= 0; --i) {
 	      target[i + targetStart] = this[i + start]
 	    }
 	  } else if (len < 1000 || !Buffer.TYPED_ARRAY_SUPPORT) {
 	    // ascending copy from start
-	    for (i = 0; i < len; i++) {
+	    for (i = 0; i < len; ++i) {
 	      target[i + targetStart] = this[i + start]
 	    }
 	  } else {
-	    target._set(this.subarray(start, start + len), targetStart)
+	    Uint8Array.prototype.set.call(
+	      target,
+	      this.subarray(start, start + len),
+	      targetStart
+	    )
 	  }
 	
 	  return len
 	}
 	
-	// fill(value, start=0, end=buffer.length)
-	Buffer.prototype.fill = function fill (value, start, end) {
-	  if (!value) value = 0
-	  if (!start) start = 0
-	  if (!end) end = this.length
+	// Usage:
+	//    buffer.fill(number[, offset[, end]])
+	//    buffer.fill(buffer[, offset[, end]])
+	//    buffer.fill(string[, offset[, end]][, encoding])
+	Buffer.prototype.fill = function fill (val, start, end, encoding) {
+	  // Handle string cases:
+	  if (typeof val === 'string') {
+	    if (typeof start === 'string') {
+	      encoding = start
+	      start = 0
+	      end = this.length
+	    } else if (typeof end === 'string') {
+	      encoding = end
+	      end = this.length
+	    }
+	    if (val.length === 1) {
+	      var code = val.charCodeAt(0)
+	      if (code < 256) {
+	        val = code
+	      }
+	    }
+	    if (encoding !== undefined && typeof encoding !== 'string') {
+	      throw new TypeError('encoding must be a string')
+	    }
+	    if (typeof encoding === 'string' && !Buffer.isEncoding(encoding)) {
+	      throw new TypeError('Unknown encoding: ' + encoding)
+	    }
+	  } else if (typeof val === 'number') {
+	    val = val & 255
+	  }
 	
-	  if (end < start) throw new RangeError('end < start')
+	  // Invalid ranges are not set to a default, so can range check early.
+	  if (start < 0 || this.length < start || this.length < end) {
+	    throw new RangeError('Out of range index')
+	  }
 	
-	  // Fill 0 bytes; we're done
-	  if (end === start) return
-	  if (this.length === 0) return
+	  if (end <= start) {
+	    return this
+	  }
 	
-	  if (start < 0 || start >= this.length) throw new RangeError('start out of bounds')
-	  if (end < 0 || end > this.length) throw new RangeError('end out of bounds')
+	  start = start >>> 0
+	  end = end === undefined ? this.length : end >>> 0
+	
+	  if (!val) val = 0
 	
 	  var i
-	  if (typeof value === 'number') {
-	    for (i = start; i < end; i++) {
-	      this[i] = value
+	  if (typeof val === 'number') {
+	    for (i = start; i < end; ++i) {
+	      this[i] = val
 	    }
 	  } else {
-	    var bytes = utf8ToBytes(value.toString())
+	    var bytes = Buffer.isBuffer(val)
+	      ? val
+	      : utf8ToBytes(new Buffer(val, encoding).toString())
 	    var len = bytes.length
-	    for (i = start; i < end; i++) {
-	      this[i] = bytes[i % len]
+	    for (i = 0; i < end - start; ++i) {
+	      this[i + start] = bytes[i % len]
 	    }
 	  }
 	
 	  return this
 	}
 	
-	/**
-	 * Creates a new `ArrayBuffer` with the *copied* memory of the buffer instance.
-	 * Added in Node 0.12. Only available in browsers that support ArrayBuffer.
-	 */
-	Buffer.prototype.toArrayBuffer = function toArrayBuffer () {
-	  if (typeof Uint8Array !== 'undefined') {
-	    if (Buffer.TYPED_ARRAY_SUPPORT) {
-	      return (new Buffer(this)).buffer
-	    } else {
-	      var buf = new Uint8Array(this.length)
-	      for (var i = 0, len = buf.length; i < len; i += 1) {
-	        buf[i] = this[i]
-	      }
-	      return buf.buffer
-	    }
-	  } else {
-	    throw new TypeError('Buffer.toArrayBuffer not supported in this browser')
-	  }
-	}
-	
 	// HELPER FUNCTIONS
 	// ================
-	
-	var BP = Buffer.prototype
-	
-	/**
-	 * Augment a Uint8Array *instance* (not the Uint8Array class!) with Buffer methods
-	 */
-	Buffer._augment = function _augment (arr) {
-	  arr.constructor = Buffer
-	  arr._isBuffer = true
-	
-	  // save reference to original Uint8Array set method before overwriting
-	  arr._set = arr.set
-	
-	  // deprecated
-	  arr.get = BP.get
-	  arr.set = BP.set
-	
-	  arr.write = BP.write
-	  arr.toString = BP.toString
-	  arr.toLocaleString = BP.toString
-	  arr.toJSON = BP.toJSON
-	  arr.equals = BP.equals
-	  arr.compare = BP.compare
-	  arr.indexOf = BP.indexOf
-	  arr.copy = BP.copy
-	  arr.slice = BP.slice
-	  arr.readUIntLE = BP.readUIntLE
-	  arr.readUIntBE = BP.readUIntBE
-	  arr.readUInt8 = BP.readUInt8
-	  arr.readUInt16LE = BP.readUInt16LE
-	  arr.readUInt16BE = BP.readUInt16BE
-	  arr.readUInt32LE = BP.readUInt32LE
-	  arr.readUInt32BE = BP.readUInt32BE
-	  arr.readIntLE = BP.readIntLE
-	  arr.readIntBE = BP.readIntBE
-	  arr.readInt8 = BP.readInt8
-	  arr.readInt16LE = BP.readInt16LE
-	  arr.readInt16BE = BP.readInt16BE
-	  arr.readInt32LE = BP.readInt32LE
-	  arr.readInt32BE = BP.readInt32BE
-	  arr.readFloatLE = BP.readFloatLE
-	  arr.readFloatBE = BP.readFloatBE
-	  arr.readDoubleLE = BP.readDoubleLE
-	  arr.readDoubleBE = BP.readDoubleBE
-	  arr.writeUInt8 = BP.writeUInt8
-	  arr.writeUIntLE = BP.writeUIntLE
-	  arr.writeUIntBE = BP.writeUIntBE
-	  arr.writeUInt16LE = BP.writeUInt16LE
-	  arr.writeUInt16BE = BP.writeUInt16BE
-	  arr.writeUInt32LE = BP.writeUInt32LE
-	  arr.writeUInt32BE = BP.writeUInt32BE
-	  arr.writeIntLE = BP.writeIntLE
-	  arr.writeIntBE = BP.writeIntBE
-	  arr.writeInt8 = BP.writeInt8
-	  arr.writeInt16LE = BP.writeInt16LE
-	  arr.writeInt16BE = BP.writeInt16BE
-	  arr.writeInt32LE = BP.writeInt32LE
-	  arr.writeInt32BE = BP.writeInt32BE
-	  arr.writeFloatLE = BP.writeFloatLE
-	  arr.writeFloatBE = BP.writeFloatBE
-	  arr.writeDoubleLE = BP.writeDoubleLE
-	  arr.writeDoubleBE = BP.writeDoubleBE
-	  arr.fill = BP.fill
-	  arr.inspect = BP.inspect
-	  arr.toArrayBuffer = BP.toArrayBuffer
-	
-	  return arr
-	}
 	
 	var INVALID_BASE64_RE = /[^+\/0-9A-Za-z-_]/g
 	
@@ -57940,7 +58177,7 @@
 	  var leadSurrogate = null
 	  var bytes = []
 	
-	  for (var i = 0; i < length; i++) {
+	  for (var i = 0; i < length; ++i) {
 	    codePoint = string.charCodeAt(i)
 	
 	    // is surrogate component
@@ -58015,7 +58252,7 @@
 	
 	function asciiToBytes (str) {
 	  var byteArray = []
-	  for (var i = 0; i < str.length; i++) {
+	  for (var i = 0; i < str.length; ++i) {
 	    // Node's code seems to be doing this and not & 0x7F..
 	    byteArray.push(str.charCodeAt(i) & 0xFF)
 	  }
@@ -58025,7 +58262,7 @@
 	function utf16leToBytes (str, units) {
 	  var c, hi, lo
 	  var byteArray = []
-	  for (var i = 0; i < str.length; i++) {
+	  for (var i = 0; i < str.length; ++i) {
 	    if ((units -= 2) < 0) break
 	
 	    c = str.charCodeAt(i)
@@ -58043,143 +58280,137 @@
 	}
 	
 	function blitBuffer (src, dst, offset, length) {
-	  for (var i = 0; i < length; i++) {
+	  for (var i = 0; i < length; ++i) {
 	    if ((i + offset >= dst.length) || (i >= src.length)) break
 	    dst[i + offset] = src[i]
 	  }
 	  return i
 	}
 	
+	function isnan (val) {
+	  return val !== val // eslint-disable-line no-self-compare
+	}
+	
 	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(16).Buffer, (function() { return this; }())))
 
 /***/ },
 /* 17 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ function(module, exports) {
 
-	var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+	'use strict'
 	
-	;(function (exports) {
-		'use strict';
+	exports.byteLength = byteLength
+	exports.toByteArray = toByteArray
+	exports.fromByteArray = fromByteArray
 	
-	  var Arr = (typeof Uint8Array !== 'undefined')
-	    ? Uint8Array
-	    : Array
+	var lookup = []
+	var revLookup = []
+	var Arr = typeof Uint8Array !== 'undefined' ? Uint8Array : Array
 	
-		var PLUS   = '+'.charCodeAt(0)
-		var SLASH  = '/'.charCodeAt(0)
-		var NUMBER = '0'.charCodeAt(0)
-		var LOWER  = 'a'.charCodeAt(0)
-		var UPPER  = 'A'.charCodeAt(0)
-		var PLUS_URL_SAFE = '-'.charCodeAt(0)
-		var SLASH_URL_SAFE = '_'.charCodeAt(0)
+	var code = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+	for (var i = 0, len = code.length; i < len; ++i) {
+	  lookup[i] = code[i]
+	  revLookup[code.charCodeAt(i)] = i
+	}
 	
-		function decode (elt) {
-			var code = elt.charCodeAt(0)
-			if (code === PLUS ||
-			    code === PLUS_URL_SAFE)
-				return 62 // '+'
-			if (code === SLASH ||
-			    code === SLASH_URL_SAFE)
-				return 63 // '/'
-			if (code < NUMBER)
-				return -1 //no match
-			if (code < NUMBER + 10)
-				return code - NUMBER + 26 + 26
-			if (code < UPPER + 26)
-				return code - UPPER
-			if (code < LOWER + 26)
-				return code - LOWER + 26
-		}
+	revLookup['-'.charCodeAt(0)] = 62
+	revLookup['_'.charCodeAt(0)] = 63
 	
-		function b64ToByteArray (b64) {
-			var i, j, l, tmp, placeHolders, arr
+	function placeHoldersCount (b64) {
+	  var len = b64.length
+	  if (len % 4 > 0) {
+	    throw new Error('Invalid string. Length must be a multiple of 4')
+	  }
 	
-			if (b64.length % 4 > 0) {
-				throw new Error('Invalid string. Length must be a multiple of 4')
-			}
+	  // the number of equal signs (place holders)
+	  // if there are two placeholders, than the two characters before it
+	  // represent one byte
+	  // if there is only one, then the three characters before it represent 2 bytes
+	  // this is just a cheap hack to not do indexOf twice
+	  return b64[len - 2] === '=' ? 2 : b64[len - 1] === '=' ? 1 : 0
+	}
 	
-			// the number of equal signs (place holders)
-			// if there are two placeholders, than the two characters before it
-			// represent one byte
-			// if there is only one, then the three characters before it represent 2 bytes
-			// this is just a cheap hack to not do indexOf twice
-			var len = b64.length
-			placeHolders = '=' === b64.charAt(len - 2) ? 2 : '=' === b64.charAt(len - 1) ? 1 : 0
+	function byteLength (b64) {
+	  // base64 is 4/3 + up to two characters of the original data
+	  return b64.length * 3 / 4 - placeHoldersCount(b64)
+	}
 	
-			// base64 is 4/3 + up to two characters of the original data
-			arr = new Arr(b64.length * 3 / 4 - placeHolders)
+	function toByteArray (b64) {
+	  var i, j, l, tmp, placeHolders, arr
+	  var len = b64.length
+	  placeHolders = placeHoldersCount(b64)
 	
-			// if there are placeholders, only get up to the last complete 4 chars
-			l = placeHolders > 0 ? b64.length - 4 : b64.length
+	  arr = new Arr(len * 3 / 4 - placeHolders)
 	
-			var L = 0
+	  // if there are placeholders, only get up to the last complete 4 chars
+	  l = placeHolders > 0 ? len - 4 : len
 	
-			function push (v) {
-				arr[L++] = v
-			}
+	  var L = 0
 	
-			for (i = 0, j = 0; i < l; i += 4, j += 3) {
-				tmp = (decode(b64.charAt(i)) << 18) | (decode(b64.charAt(i + 1)) << 12) | (decode(b64.charAt(i + 2)) << 6) | decode(b64.charAt(i + 3))
-				push((tmp & 0xFF0000) >> 16)
-				push((tmp & 0xFF00) >> 8)
-				push(tmp & 0xFF)
-			}
+	  for (i = 0, j = 0; i < l; i += 4, j += 3) {
+	    tmp = (revLookup[b64.charCodeAt(i)] << 18) | (revLookup[b64.charCodeAt(i + 1)] << 12) | (revLookup[b64.charCodeAt(i + 2)] << 6) | revLookup[b64.charCodeAt(i + 3)]
+	    arr[L++] = (tmp >> 16) & 0xFF
+	    arr[L++] = (tmp >> 8) & 0xFF
+	    arr[L++] = tmp & 0xFF
+	  }
 	
-			if (placeHolders === 2) {
-				tmp = (decode(b64.charAt(i)) << 2) | (decode(b64.charAt(i + 1)) >> 4)
-				push(tmp & 0xFF)
-			} else if (placeHolders === 1) {
-				tmp = (decode(b64.charAt(i)) << 10) | (decode(b64.charAt(i + 1)) << 4) | (decode(b64.charAt(i + 2)) >> 2)
-				push((tmp >> 8) & 0xFF)
-				push(tmp & 0xFF)
-			}
+	  if (placeHolders === 2) {
+	    tmp = (revLookup[b64.charCodeAt(i)] << 2) | (revLookup[b64.charCodeAt(i + 1)] >> 4)
+	    arr[L++] = tmp & 0xFF
+	  } else if (placeHolders === 1) {
+	    tmp = (revLookup[b64.charCodeAt(i)] << 10) | (revLookup[b64.charCodeAt(i + 1)] << 4) | (revLookup[b64.charCodeAt(i + 2)] >> 2)
+	    arr[L++] = (tmp >> 8) & 0xFF
+	    arr[L++] = tmp & 0xFF
+	  }
 	
-			return arr
-		}
+	  return arr
+	}
 	
-		function uint8ToBase64 (uint8) {
-			var i,
-				extraBytes = uint8.length % 3, // if we have 1 byte left, pad 2 bytes
-				output = "",
-				temp, length
+	function tripletToBase64 (num) {
+	  return lookup[num >> 18 & 0x3F] + lookup[num >> 12 & 0x3F] + lookup[num >> 6 & 0x3F] + lookup[num & 0x3F]
+	}
 	
-			function encode (num) {
-				return lookup.charAt(num)
-			}
+	function encodeChunk (uint8, start, end) {
+	  var tmp
+	  var output = []
+	  for (var i = start; i < end; i += 3) {
+	    tmp = (uint8[i] << 16) + (uint8[i + 1] << 8) + (uint8[i + 2])
+	    output.push(tripletToBase64(tmp))
+	  }
+	  return output.join('')
+	}
 	
-			function tripletToBase64 (num) {
-				return encode(num >> 18 & 0x3F) + encode(num >> 12 & 0x3F) + encode(num >> 6 & 0x3F) + encode(num & 0x3F)
-			}
+	function fromByteArray (uint8) {
+	  var tmp
+	  var len = uint8.length
+	  var extraBytes = len % 3 // if we have 1 byte left, pad 2 bytes
+	  var output = ''
+	  var parts = []
+	  var maxChunkLength = 16383 // must be multiple of 3
 	
-			// go through the array every three bytes, we'll deal with trailing stuff later
-			for (i = 0, length = uint8.length - extraBytes; i < length; i += 3) {
-				temp = (uint8[i] << 16) + (uint8[i + 1] << 8) + (uint8[i + 2])
-				output += tripletToBase64(temp)
-			}
+	  // go through the array every three bytes, we'll deal with trailing stuff later
+	  for (var i = 0, len2 = len - extraBytes; i < len2; i += maxChunkLength) {
+	    parts.push(encodeChunk(uint8, i, (i + maxChunkLength) > len2 ? len2 : (i + maxChunkLength)))
+	  }
 	
-			// pad the end with zeros, but make sure to not forget the extra bytes
-			switch (extraBytes) {
-				case 1:
-					temp = uint8[uint8.length - 1]
-					output += encode(temp >> 2)
-					output += encode((temp << 4) & 0x3F)
-					output += '=='
-					break
-				case 2:
-					temp = (uint8[uint8.length - 2] << 8) + (uint8[uint8.length - 1])
-					output += encode(temp >> 10)
-					output += encode((temp >> 4) & 0x3F)
-					output += encode((temp << 2) & 0x3F)
-					output += '='
-					break
-			}
+	  // pad the end with zeros, but make sure to not forget the extra bytes
+	  if (extraBytes === 1) {
+	    tmp = uint8[len - 1]
+	    output += lookup[tmp >> 2]
+	    output += lookup[(tmp << 4) & 0x3F]
+	    output += '=='
+	  } else if (extraBytes === 2) {
+	    tmp = (uint8[len - 2] << 8) + (uint8[len - 1])
+	    output += lookup[tmp >> 10]
+	    output += lookup[(tmp >> 4) & 0x3F]
+	    output += lookup[(tmp << 2) & 0x3F]
+	    output += '='
+	  }
 	
-			return output
-		}
+	  parts.push(output)
 	
-		exports.toByteArray = b64ToByteArray
-		exports.fromByteArray = uint8ToBase64
-	}( false ? (this.base64js = {}) : exports))
+	  return parts.join('')
+	}
 
 
 /***/ },
@@ -58311,9 +58542,9 @@
 
 	
 	var GameStream = __webpack_require__(23);
-	GameStream.SocketServer = __webpack_require__(66);
-	GameStream.Socket = __webpack_require__(135);
-	GameStream.mergeStates = __webpack_require__(59).merge;
+	GameStream.SocketServer = __webpack_require__(65);
+	GameStream.Socket = __webpack_require__(134);
+	GameStream.mergeStates = __webpack_require__(58).merge;
 	
 	module.exports = GameStream;
 
@@ -58324,15 +58555,15 @@
 
 	
 	var Duplex = __webpack_require__(24);
-	var inherits = __webpack_require__(44);
-	var now = __webpack_require__(48);
-	var PlaybackControls = __webpack_require__(49);
-	var statesUtil = __webpack_require__(59);
-	var CustomWritable = __webpack_require__(58);
-	var Config = __webpack_require__(60);
-	var StateFactory = __webpack_require__(61);
-	var StatesTimeStore = __webpack_require__(63);
-	var Buffer = __webpack_require__(65);
+	var inherits = __webpack_require__(28);
+	var now = __webpack_require__(47);
+	var PlaybackControls = __webpack_require__(48);
+	var statesUtil = __webpack_require__(58);
+	var CustomWritable = __webpack_require__(57);
+	var Config = __webpack_require__(59);
+	var StateFactory = __webpack_require__(60);
+	var StatesTimeStore = __webpack_require__(62);
+	var Buffer = __webpack_require__(64);
 	
 	var defaultConfig = new Config({
 		push: true,
@@ -58486,8 +58717,8 @@
 
 	
 	var Writable = __webpack_require__(25);
-	var Readable = __webpack_require__(45);
-	var inherits = __webpack_require__(44);
+	var Readable = __webpack_require__(44);
+	var inherits = __webpack_require__(28);
 	
 	function Duplex() {
 		Writable.call(this);
@@ -58506,7 +58737,7 @@
 
 	
 	var Stream = __webpack_require__(26);
-	var inherits = __webpack_require__(44);
+	var inherits = __webpack_require__(28);
 	
 	function Writable() {
 		Stream.call(this, { objectMode: true });
@@ -58717,8 +58948,12 @@
 	      er = arguments[1];
 	      if (er instanceof Error) {
 	        throw er; // Unhandled 'error' event
+	      } else {
+	        // At least give some kind of context to the user
+	        var err = new Error('Uncaught, unspecified "error" event. (' + er + ')');
+	        err.context = er;
+	        throw err;
 	      }
-	      throw TypeError('Uncaught, unspecified "error" event.');
 	    }
 	  }
 	
@@ -59009,8 +59244,94 @@
 /***/ function(module, exports) {
 
 	// shim for using process in browser
-	
 	var process = module.exports = {};
+	
+	// cached from whatever global is present so that test runners that stub it
+	// don't break things.  But we need to wrap it in a try catch in case it is
+	// wrapped in strict mode code which doesn't define any globals.  It's inside a
+	// function because try/catches deoptimize in certain engines.
+	
+	var cachedSetTimeout;
+	var cachedClearTimeout;
+	
+	function defaultSetTimout() {
+	    throw new Error('setTimeout has not been defined');
+	}
+	function defaultClearTimeout () {
+	    throw new Error('clearTimeout has not been defined');
+	}
+	(function () {
+	    try {
+	        if (typeof setTimeout === 'function') {
+	            cachedSetTimeout = setTimeout;
+	        } else {
+	            cachedSetTimeout = defaultSetTimout;
+	        }
+	    } catch (e) {
+	        cachedSetTimeout = defaultSetTimout;
+	    }
+	    try {
+	        if (typeof clearTimeout === 'function') {
+	            cachedClearTimeout = clearTimeout;
+	        } else {
+	            cachedClearTimeout = defaultClearTimeout;
+	        }
+	    } catch (e) {
+	        cachedClearTimeout = defaultClearTimeout;
+	    }
+	} ())
+	function runTimeout(fun) {
+	    if (cachedSetTimeout === setTimeout) {
+	        //normal enviroments in sane situations
+	        return setTimeout(fun, 0);
+	    }
+	    // if setTimeout wasn't available but was latter defined
+	    if ((cachedSetTimeout === defaultSetTimout || !cachedSetTimeout) && setTimeout) {
+	        cachedSetTimeout = setTimeout;
+	        return setTimeout(fun, 0);
+	    }
+	    try {
+	        // when when somebody has screwed with setTimeout but no I.E. maddness
+	        return cachedSetTimeout(fun, 0);
+	    } catch(e){
+	        try {
+	            // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
+	            return cachedSetTimeout.call(null, fun, 0);
+	        } catch(e){
+	            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
+	            return cachedSetTimeout.call(this, fun, 0);
+	        }
+	    }
+	
+	
+	}
+	function runClearTimeout(marker) {
+	    if (cachedClearTimeout === clearTimeout) {
+	        //normal enviroments in sane situations
+	        return clearTimeout(marker);
+	    }
+	    // if clearTimeout wasn't available but was latter defined
+	    if ((cachedClearTimeout === defaultClearTimeout || !cachedClearTimeout) && clearTimeout) {
+	        cachedClearTimeout = clearTimeout;
+	        return clearTimeout(marker);
+	    }
+	    try {
+	        // when when somebody has screwed with setTimeout but no I.E. maddness
+	        return cachedClearTimeout(marker);
+	    } catch (e){
+	        try {
+	            // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
+	            return cachedClearTimeout.call(null, marker);
+	        } catch (e){
+	            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
+	            // Some versions of I.E. have different rules for clearTimeout vs setTimeout
+	            return cachedClearTimeout.call(this, marker);
+	        }
+	    }
+	
+	
+	
+	}
 	var queue = [];
 	var draining = false;
 	var currentQueue;
@@ -59035,7 +59356,7 @@
 	    if (draining) {
 	        return;
 	    }
-	    var timeout = setTimeout(cleanUpNextTick);
+	    var timeout = runTimeout(cleanUpNextTick);
 	    draining = true;
 	
 	    var len = queue.length;
@@ -59052,7 +59373,7 @@
 	    }
 	    currentQueue = null;
 	    draining = false;
-	    clearTimeout(timeout);
+	    runClearTimeout(timeout);
 	}
 	
 	process.nextTick = function (fun) {
@@ -59064,7 +59385,7 @@
 	    }
 	    queue.push(new Item(fun, args));
 	    if (queue.length === 1 && !draining) {
-	        setTimeout(drainQueue, 0);
+	        runTimeout(drainQueue);
 	    }
 	};
 	
@@ -61295,41 +61616,12 @@
 
 /***/ },
 /* 44 */
-/***/ function(module, exports) {
-
-	if (typeof Object.create === 'function') {
-	  // implementation from standard node.js 'util' module
-	  module.exports = function inherits(ctor, superCtor) {
-	    ctor.super_ = superCtor
-	    ctor.prototype = Object.create(superCtor.prototype, {
-	      constructor: {
-	        value: ctor,
-	        enumerable: false,
-	        writable: true,
-	        configurable: true
-	      }
-	    });
-	  };
-	} else {
-	  // old school shim for old browsers
-	  module.exports = function inherits(ctor, superCtor) {
-	    ctor.super_ = superCtor
-	    var TempCtor = function () {}
-	    TempCtor.prototype = superCtor.prototype
-	    ctor.prototype = new TempCtor()
-	    ctor.prototype.constructor = ctor
-	  }
-	}
-
-
-/***/ },
-/* 45 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
 	var Stream = __webpack_require__(26);
-	var inherits = __webpack_require__(44);
-	var PipeBag = __webpack_require__(46);
+	var inherits = __webpack_require__(28);
+	var PipeBag = __webpack_require__(45);
 	
 	function Readable() {
 		Stream.call(this, { objectMode: true });
@@ -61343,11 +61635,11 @@
 
 
 /***/ },
-/* 46 */
+/* 45 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
-	var Pipe = __webpack_require__(47);
+	var Pipe = __webpack_require__(46);
 	
 	function PipeBag(parent) {
 		this._parent = parent;
@@ -61395,7 +61687,7 @@
 
 
 /***/ },
-/* 47 */
+/* 46 */
 /***/ function(module, exports) {
 
 	
@@ -61407,7 +61699,7 @@
 
 
 /***/ },
-/* 48 */
+/* 47 */
 /***/ function(module, exports) {
 
 	
@@ -61419,19 +61711,19 @@
 
 
 /***/ },
-/* 49 */
+/* 48 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
 	var Stream = __webpack_require__(26);
-	var inherits = __webpack_require__(44);
-	var playbackUtil = __webpack_require__(50);
-	var OutputState = __webpack_require__(51);
-	var RewriteOutputState = __webpack_require__(52);
-	var CatchUpOutputState = __webpack_require__(53);
-	var PlaybackPointer = __webpack_require__(54);
-	var PipeBag = __webpack_require__(46);
-	var CustomWritable = __webpack_require__(58);
+	var inherits = __webpack_require__(28);
+	var playbackUtil = __webpack_require__(49);
+	var OutputState = __webpack_require__(50);
+	var RewriteOutputState = __webpack_require__(51);
+	var CatchUpOutputState = __webpack_require__(52);
+	var PlaybackPointer = __webpack_require__(53);
+	var PipeBag = __webpack_require__(45);
+	var CustomWritable = __webpack_require__(57);
 	
 	function PlaybackControls(statesTimeStore) {
 		Stream.call(this, { objectMode: true });
@@ -61574,11 +61866,11 @@
 
 
 /***/ },
-/* 50 */
+/* 49 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
-	var now = __webpack_require__(48);
+	var now = __webpack_require__(47);
 	
 	function playbackToReal(playbackTime, referencePoint) {
 		return referencePoint.real + ((playbackTime - referencePoint.play) * (1 / referencePoint.speed));
@@ -61598,7 +61890,7 @@
 
 
 /***/ },
-/* 51 */
+/* 50 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -61633,7 +61925,7 @@
 
 
 /***/ },
-/* 52 */
+/* 51 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -61665,7 +61957,7 @@
 
 
 /***/ },
-/* 53 */
+/* 52 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -61689,13 +61981,13 @@
 
 
 /***/ },
-/* 54 */
+/* 53 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
-	var PlaybackTimer = __webpack_require__(55);
-	var now = __webpack_require__(48);
-	var PlaybackLogger = __webpack_require__(57);
+	var PlaybackTimer = __webpack_require__(54);
+	var now = __webpack_require__(47);
+	var PlaybackLogger = __webpack_require__(56);
 	
 	function PlaybackPointer(statesTimeStore) {
 		this._timeStore = statesTimeStore;
@@ -61809,12 +62101,12 @@
 
 
 /***/ },
-/* 55 */
+/* 54 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
-	var playbackUtil = __webpack_require__(50);
-	var PlaybackPoint = __webpack_require__(56);
+	var playbackUtil = __webpack_require__(49);
+	var PlaybackPoint = __webpack_require__(55);
 	
 	function PlaybackTimer(playTime) {
 		this._rebase(
@@ -61887,11 +62179,11 @@
 
 
 /***/ },
-/* 56 */
+/* 55 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
-	var playbackUtil = __webpack_require__(50);
+	var playbackUtil = __webpack_require__(49);
 	
 	function PlaybackPoint(realTime, playTime, speed) {
 		this.real = realTime;
@@ -61916,7 +62208,7 @@
 
 
 /***/ },
-/* 57 */
+/* 56 */
 /***/ function(module, exports) {
 
 	
@@ -61968,12 +62260,12 @@
 
 
 /***/ },
-/* 58 */
+/* 57 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
 	var Stream = __webpack_require__(26);
-	var inherits = __webpack_require__(44);
+	var inherits = __webpack_require__(28);
 	
 	function CustomWritable(callback) {
 		this._callback = callback;
@@ -61989,11 +62281,11 @@
 
 
 /***/ },
-/* 59 */
+/* 58 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
-	var RewriteOutputState = __webpack_require__(52);
+	var RewriteOutputState = __webpack_require__(51);
 	var objectFactory = __webpack_require__(14);
 	
 	function timeSort(states) {
@@ -62023,7 +62315,7 @@
 
 
 /***/ },
-/* 60 */
+/* 59 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -62054,13 +62346,13 @@
 
 
 /***/ },
-/* 61 */
+/* 60 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
 	var Duplex = __webpack_require__(24);
-	var inherits = __webpack_require__(44);
-	var State = __webpack_require__(62);
+	var inherits = __webpack_require__(28);
+	var State = __webpack_require__(61);
 	
 	function StateFactory() {
 		Duplex.call(this);
@@ -62085,7 +62377,7 @@
 
 
 /***/ },
-/* 62 */
+/* 61 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -62156,15 +62448,15 @@
 
 
 /***/ },
-/* 63 */
+/* 62 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
 	var Stream = __webpack_require__(26);
-	var inherits = __webpack_require__(44);
-	var State = __webpack_require__(62);
-	var StateZero = __webpack_require__(64);
-	var now = __webpack_require__(48);
+	var inherits = __webpack_require__(28);
+	var State = __webpack_require__(61);
+	var StateZero = __webpack_require__(63);
+	var now = __webpack_require__(47);
 	
 	function StatesTimeStore() {
 		this.states = [];
@@ -62272,7 +62564,7 @@
 
 
 /***/ },
-/* 64 */
+/* 63 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -62299,13 +62591,13 @@
 
 
 /***/ },
-/* 65 */
+/* 64 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
 	var Stream = __webpack_require__(26);
-	var inherits = __webpack_require__(44);
-	var PipeBag = __webpack_require__(46);
+	var inherits = __webpack_require__(28);
+	var PipeBag = __webpack_require__(45);
 	
 	function Buffer() {
 		this._pipes = new PipeBag(this);
@@ -62331,15 +62623,15 @@
 
 
 /***/ },
-/* 66 */
+/* 65 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
 	var Stream = __webpack_require__(26);
-	var inherits = __webpack_require__(44);
-	var WebSocketServer = __webpack_require__(67).Server;
-	var defaultSocketConfig = __webpack_require__(134);
-	var Config = __webpack_require__(60);
+	var inherits = __webpack_require__(28);
+	var WebSocketServer = __webpack_require__(66).Server;
+	var defaultSocketConfig = __webpack_require__(133);
+	var Config = __webpack_require__(59);
 	
 	function SocketServer(config) {
 		config = new Config(defaultSocketConfig, [config]);
@@ -62363,7 +62655,7 @@
 
 
 /***/ },
-/* 67 */
+/* 66 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -62374,11 +62666,11 @@
 	 * MIT Licensed
 	 */
 	
-	var WS = module.exports = __webpack_require__(68);
+	var WS = module.exports = __webpack_require__(67);
 	
-	WS.Server = __webpack_require__(133);
-	WS.Sender = __webpack_require__(100);
-	WS.Receiver = __webpack_require__(126);
+	WS.Server = __webpack_require__(132);
+	WS.Sender = __webpack_require__(99);
+	WS.Receiver = __webpack_require__(125);
 	
 	/**
 	 * Create a new WebSocket server.
@@ -62418,7 +62710,7 @@
 
 
 /***/ },
-/* 68 */
+/* 67 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(Buffer, process) {'use strict';
@@ -62429,20 +62721,20 @@
 	 * MIT Licensed
 	 */
 	
-	var url = __webpack_require__(69)
-	  , util = __webpack_require__(75)
-	  , http = __webpack_require__(77)
-	  , https = __webpack_require__(81)
-	  , crypto = __webpack_require__(82)
+	var url = __webpack_require__(68)
+	  , util = __webpack_require__(74)
+	  , http = __webpack_require__(76)
+	  , https = __webpack_require__(80)
+	  , crypto = __webpack_require__(81)
 	  , stream = __webpack_require__(26)
-	  , Ultron = __webpack_require__(97)
-	  , Options = __webpack_require__(98)
-	  , Sender = __webpack_require__(100)
-	  , Receiver = __webpack_require__(126)
-	  , SenderHixie = __webpack_require__(130)
-	  , ReceiverHixie = __webpack_require__(131)
-	  , Extensions = __webpack_require__(132)
-	  , PerMessageDeflate = __webpack_require__(104)
+	  , Ultron = __webpack_require__(96)
+	  , Options = __webpack_require__(97)
+	  , Sender = __webpack_require__(99)
+	  , Receiver = __webpack_require__(125)
+	  , SenderHixie = __webpack_require__(129)
+	  , ReceiverHixie = __webpack_require__(130)
+	  , Extensions = __webpack_require__(131)
+	  , PerMessageDeflate = __webpack_require__(103)
 	  , EventEmitter = __webpack_require__(27).EventEmitter;
 	
 	/**
@@ -63412,7 +63704,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(16).Buffer, __webpack_require__(30)))
 
 /***/ },
-/* 69 */
+/* 68 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// Copyright Joyent, Inc. and other Node contributors.
@@ -63436,7 +63728,7 @@
 	// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 	// USE OR OTHER DEALINGS IN THE SOFTWARE.
 	
-	var punycode = __webpack_require__(70);
+	var punycode = __webpack_require__(69);
 	
 	exports.parse = urlParse;
 	exports.resolve = urlResolve;
@@ -63508,7 +63800,7 @@
 	      'gopher:': true,
 	      'file:': true
 	    },
-	    querystring = __webpack_require__(72);
+	    querystring = __webpack_require__(71);
 	
 	function urlParse(url, parseQueryString, slashesDenoteHost) {
 	  if (url && isObject(url) && url instanceof Url) return url;
@@ -64125,7 +64417,7 @@
 
 
 /***/ },
-/* 70 */
+/* 69 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;/* WEBPACK VAR INJECTION */(function(module, global) {/*! https://mths.be/punycode v1.3.2 by @mathias */
@@ -64657,10 +64949,10 @@
 	
 	}(this));
 	
-	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(71)(module), (function() { return this; }())))
+	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(70)(module), (function() { return this; }())))
 
 /***/ },
-/* 71 */
+/* 70 */
 /***/ function(module, exports) {
 
 	module.exports = function(module) {
@@ -64676,17 +64968,17 @@
 
 
 /***/ },
-/* 72 */
+/* 71 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 	
-	exports.decode = exports.parse = __webpack_require__(73);
-	exports.encode = exports.stringify = __webpack_require__(74);
+	exports.decode = exports.parse = __webpack_require__(72);
+	exports.encode = exports.stringify = __webpack_require__(73);
 
 
 /***/ },
-/* 73 */
+/* 72 */
 /***/ function(module, exports) {
 
 	// Copyright Joyent, Inc. and other Node contributors.
@@ -64772,7 +65064,7 @@
 
 
 /***/ },
-/* 74 */
+/* 73 */
 /***/ function(module, exports) {
 
 	// Copyright Joyent, Inc. and other Node contributors.
@@ -64842,7 +65134,7 @@
 
 
 /***/ },
-/* 75 */
+/* 74 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global, process) {// Copyright Joyent, Inc. and other Node contributors.
@@ -65370,7 +65662,7 @@
 	}
 	exports.isPrimitive = isPrimitive;
 	
-	exports.isBuffer = __webpack_require__(76);
+	exports.isBuffer = __webpack_require__(75);
 	
 	function objectToString(o) {
 	  return Object.prototype.toString.call(o);
@@ -65435,7 +65727,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }()), __webpack_require__(30)))
 
 /***/ },
-/* 76 */
+/* 75 */
 /***/ function(module, exports) {
 
 	module.exports = function isBuffer(arg) {
@@ -65446,13 +65738,13 @@
 	}
 
 /***/ },
-/* 77 */
+/* 76 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var http = module.exports;
 	var EventEmitter = __webpack_require__(27).EventEmitter;
-	var Request = __webpack_require__(78);
-	var url = __webpack_require__(69)
+	var Request = __webpack_require__(77);
+	var url = __webpack_require__(68)
 	
 	http.request = function (params, cb) {
 	    if (typeof params === 'string') {
@@ -65596,12 +65888,12 @@
 	};
 
 /***/ },
-/* 78 */
+/* 77 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var Stream = __webpack_require__(26);
-	var Response = __webpack_require__(79);
-	var Base64 = __webpack_require__(80);
+	var Response = __webpack_require__(78);
+	var Base64 = __webpack_require__(79);
 	var inherits = __webpack_require__(28);
 	
 	var Request = module.exports = function (xhr, params) {
@@ -65811,11 +66103,11 @@
 
 
 /***/ },
-/* 79 */
+/* 78 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var Stream = __webpack_require__(26);
-	var util = __webpack_require__(75);
+	var util = __webpack_require__(74);
 	
 	var Response = module.exports = function (res) {
 	    this.offset = 0;
@@ -65937,7 +66229,7 @@
 
 
 /***/ },
-/* 80 */
+/* 79 */
 /***/ function(module, exports, __webpack_require__) {
 
 	;(function () {
@@ -66003,10 +66295,10 @@
 
 
 /***/ },
-/* 81 */
+/* 80 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var http = __webpack_require__(77);
+	var http = __webpack_require__(76);
 	
 	var https = module.exports;
 	
@@ -66022,10 +66314,10 @@
 
 
 /***/ },
-/* 82 */
+/* 81 */
 /***/ function(module, exports, __webpack_require__) {
 
-	/* WEBPACK VAR INJECTION */(function(Buffer) {var rng = __webpack_require__(83)
+	/* WEBPACK VAR INJECTION */(function(Buffer) {var rng = __webpack_require__(82)
 	
 	function error () {
 	  var m = [].slice.call(arguments).join(' ')
@@ -66036,9 +66328,9 @@
 	    ].join('\n'))
 	}
 	
-	exports.createHash = __webpack_require__(85)
+	exports.createHash = __webpack_require__(84)
 	
-	exports.createHmac = __webpack_require__(94)
+	exports.createHmac = __webpack_require__(93)
 	
 	exports.randomBytes = function(size, callback) {
 	  if (callback && callback.call) {
@@ -66059,7 +66351,7 @@
 	  return ['sha1', 'sha256', 'sha512', 'md5', 'rmd160']
 	}
 	
-	var p = __webpack_require__(95)(exports)
+	var p = __webpack_require__(94)(exports)
 	exports.pbkdf2 = p.pbkdf2
 	exports.pbkdf2Sync = p.pbkdf2Sync
 	
@@ -66082,13 +66374,13 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(16).Buffer))
 
 /***/ },
-/* 83 */
+/* 82 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global, Buffer) {(function() {
 	  var g = ('undefined' === typeof window ? global : window) || {}
 	  _crypto = (
-	    g.crypto || g.msCrypto || __webpack_require__(84)
+	    g.crypto || g.msCrypto || __webpack_require__(83)
 	  )
 	  module.exports = function(size) {
 	    // Modern Browsers
@@ -66115,19 +66407,19 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }()), __webpack_require__(16).Buffer))
 
 /***/ },
-/* 84 */
+/* 83 */
 /***/ function(module, exports) {
 
 	/* (ignored) */
 
 /***/ },
-/* 85 */
+/* 84 */
 /***/ function(module, exports, __webpack_require__) {
 
-	/* WEBPACK VAR INJECTION */(function(Buffer) {var createHash = __webpack_require__(86)
+	/* WEBPACK VAR INJECTION */(function(Buffer) {var createHash = __webpack_require__(85)
 	
-	var md5 = toConstructor(__webpack_require__(91))
-	var rmd160 = toConstructor(__webpack_require__(93))
+	var md5 = toConstructor(__webpack_require__(90))
+	var rmd160 = toConstructor(__webpack_require__(92))
 	
 	function toConstructor (fn) {
 	  return function () {
@@ -66158,7 +66450,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(16).Buffer))
 
 /***/ },
-/* 86 */
+/* 85 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var exports = module.exports = function (alg) {
@@ -66168,15 +66460,15 @@
 	}
 	
 	var Buffer = __webpack_require__(16).Buffer
-	var Hash   = __webpack_require__(87)(Buffer)
+	var Hash   = __webpack_require__(86)(Buffer)
 	
-	exports.sha1 = __webpack_require__(88)(Buffer, Hash)
-	exports.sha256 = __webpack_require__(89)(Buffer, Hash)
-	exports.sha512 = __webpack_require__(90)(Buffer, Hash)
+	exports.sha1 = __webpack_require__(87)(Buffer, Hash)
+	exports.sha256 = __webpack_require__(88)(Buffer, Hash)
+	exports.sha512 = __webpack_require__(89)(Buffer, Hash)
 
 
 /***/ },
-/* 87 */
+/* 86 */
 /***/ function(module, exports) {
 
 	module.exports = function (Buffer) {
@@ -66259,7 +66551,7 @@
 
 
 /***/ },
-/* 88 */
+/* 87 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/*
@@ -66271,7 +66563,7 @@
 	 * See http://pajhome.org.uk/crypt/md5 for details.
 	 */
 	
-	var inherits = __webpack_require__(75).inherits
+	var inherits = __webpack_require__(74).inherits
 	
 	module.exports = function (Buffer, Hash) {
 	
@@ -66403,7 +66695,7 @@
 
 
 /***/ },
-/* 89 */
+/* 88 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -66415,7 +66707,7 @@
 	 *
 	 */
 	
-	var inherits = __webpack_require__(75).inherits
+	var inherits = __webpack_require__(74).inherits
 	
 	module.exports = function (Buffer, Hash) {
 	
@@ -66556,10 +66848,10 @@
 
 
 /***/ },
-/* 90 */
+/* 89 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var inherits = __webpack_require__(75).inherits
+	var inherits = __webpack_require__(74).inherits
 	
 	module.exports = function (Buffer, Hash) {
 	  var K = [
@@ -66806,7 +67098,7 @@
 
 
 /***/ },
-/* 91 */
+/* 90 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/*
@@ -66818,7 +67110,7 @@
 	 * See http://pajhome.org.uk/crypt/md5 for more info.
 	 */
 	
-	var helpers = __webpack_require__(92);
+	var helpers = __webpack_require__(91);
 	
 	/*
 	 * Calculate the MD5 of an array of little-endian words, and a bit length
@@ -66967,7 +67259,7 @@
 
 
 /***/ },
-/* 92 */
+/* 91 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(Buffer) {var intSize = 4;
@@ -67008,7 +67300,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(16).Buffer))
 
 /***/ },
-/* 93 */
+/* 92 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(Buffer) {
@@ -67220,10 +67512,10 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(16).Buffer))
 
 /***/ },
-/* 94 */
+/* 93 */
 /***/ function(module, exports, __webpack_require__) {
 
-	/* WEBPACK VAR INJECTION */(function(Buffer) {var createHash = __webpack_require__(85)
+	/* WEBPACK VAR INJECTION */(function(Buffer) {var createHash = __webpack_require__(84)
 	
 	var zeroBuffer = new Buffer(128)
 	zeroBuffer.fill(0)
@@ -67270,10 +67562,10 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(16).Buffer))
 
 /***/ },
-/* 95 */
+/* 94 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var pbkdf2Export = __webpack_require__(96)
+	var pbkdf2Export = __webpack_require__(95)
 	
 	module.exports = function (crypto, exports) {
 	  exports = exports || {}
@@ -67288,7 +67580,7 @@
 
 
 /***/ },
-/* 96 */
+/* 95 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(Buffer) {module.exports = function(crypto) {
@@ -67379,7 +67671,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(16).Buffer))
 
 /***/ },
-/* 97 */
+/* 96 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -67514,7 +67806,7 @@
 
 
 /***/ },
-/* 98 */
+/* 97 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/*!
@@ -67522,7 +67814,7 @@
 	 * MIT Licensed
 	 */
 	
-	var fs = __webpack_require__(99);
+	var fs = __webpack_require__(98);
 	
 	function Options(defaults) {
 	  var internalValues = {};
@@ -67606,13 +67898,13 @@
 
 
 /***/ },
-/* 99 */
+/* 98 */
 /***/ function(module, exports) {
 
 
 
 /***/ },
-/* 100 */
+/* 99 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(Buffer) {/*!
@@ -67622,11 +67914,11 @@
 	 */
 	
 	var events = __webpack_require__(27)
-	  , util = __webpack_require__(75)
+	  , util = __webpack_require__(74)
 	  , EventEmitter = events.EventEmitter
-	  , ErrorCodes = __webpack_require__(101)
-	  , bufferUtil = __webpack_require__(102).BufferUtil
-	  , PerMessageDeflate = __webpack_require__(104);
+	  , ErrorCodes = __webpack_require__(100)
+	  , bufferUtil = __webpack_require__(101).BufferUtil
+	  , PerMessageDeflate = __webpack_require__(103);
 	
 	/**
 	 * HyBi Sender implementation
@@ -67943,7 +68235,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(16).Buffer))
 
 /***/ },
-/* 101 */
+/* 100 */
 /***/ function(module, exports) {
 
 	/*!
@@ -67972,7 +68264,7 @@
 	};
 
 /***/ },
-/* 102 */
+/* 101 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -67986,12 +68278,12 @@
 	try {
 	  module.exports = __webpack_require__(!(function webpackMissingModule() { var e = new Error("Cannot find module \"bufferutil\""); e.code = 'MODULE_NOT_FOUND'; throw e; }()));
 	} catch (e) {
-	  module.exports = __webpack_require__(103);
+	  module.exports = __webpack_require__(102);
 	}
 
 
 /***/ },
-/* 103 */
+/* 102 */
 /***/ function(module, exports) {
 
 	/*!
@@ -68044,11 +68336,11 @@
 
 
 /***/ },
-/* 104 */
+/* 103 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(Buffer) {
-	var zlib = __webpack_require__(105);
+	var zlib = __webpack_require__(104);
 	
 	var AVAILABLE_WINDOW_BITS = [8, 9, 10, 11, 12, 13, 14, 15];
 	var DEFAULT_WINDOW_BITS = 15;
@@ -68388,7 +68680,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(16).Buffer))
 
 /***/ },
-/* 105 */
+/* 104 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(Buffer, process) {// Copyright Joyent, Inc. and other Node contributors.
@@ -68412,11 +68704,11 @@
 	// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 	// USE OR OTHER DEALINGS IN THE SOFTWARE.
 	
-	var Transform = __webpack_require__(106);
+	var Transform = __webpack_require__(105);
 	
-	var binding = __webpack_require__(113);
-	var util = __webpack_require__(75);
-	var assert = __webpack_require__(125).ok;
+	var binding = __webpack_require__(112);
+	var util = __webpack_require__(74);
+	var assert = __webpack_require__(124).ok;
 	
 	// zlib doesn't provide these, so kludge them in following the same
 	// const naming scheme zlib uses.
@@ -69005,14 +69297,14 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(16).Buffer, __webpack_require__(30)))
 
 /***/ },
-/* 106 */
+/* 105 */
 /***/ function(module, exports, __webpack_require__) {
 
-	module.exports = __webpack_require__(107)
+	module.exports = __webpack_require__(106)
 
 
 /***/ },
-/* 107 */
+/* 106 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// Copyright Joyent, Inc. and other Node contributors.
@@ -69081,7 +69373,7 @@
 	
 	module.exports = Transform;
 	
-	var Duplex = __webpack_require__(108);
+	var Duplex = __webpack_require__(107);
 	
 	/*<replacement>*/
 	var util = __webpack_require__(33);
@@ -69227,7 +69519,7 @@
 
 
 /***/ },
-/* 108 */
+/* 107 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(process) {// Copyright Joyent, Inc. and other Node contributors.
@@ -69272,8 +69564,8 @@
 	util.inherits = __webpack_require__(28);
 	/*</replacement>*/
 	
-	var Readable = __webpack_require__(109);
-	var Writable = __webpack_require__(112);
+	var Readable = __webpack_require__(108);
+	var Writable = __webpack_require__(111);
 	
 	util.inherits(Duplex, Readable);
 	
@@ -69323,7 +69615,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(30)))
 
 /***/ },
-/* 109 */
+/* 108 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(process) {// Copyright Joyent, Inc. and other Node contributors.
@@ -69350,7 +69642,7 @@
 	module.exports = Readable;
 	
 	/*<replacement>*/
-	var isArray = __webpack_require__(110);
+	var isArray = __webpack_require__(109);
 	/*</replacement>*/
 	
 	
@@ -69379,7 +69671,7 @@
 	
 	
 	/*<replacement>*/
-	var debug = __webpack_require__(111);
+	var debug = __webpack_require__(110);
 	if (debug && debug.debuglog) {
 	  debug = debug.debuglog('stream');
 	} else {
@@ -69391,7 +69683,7 @@
 	util.inherits(Readable, Stream);
 	
 	function ReadableState(options, stream) {
-	  var Duplex = __webpack_require__(108);
+	  var Duplex = __webpack_require__(107);
 	
 	  options = options || {};
 	
@@ -69459,7 +69751,7 @@
 	}
 	
 	function Readable(options) {
-	  var Duplex = __webpack_require__(108);
+	  var Duplex = __webpack_require__(107);
 	
 	  if (!(this instanceof Readable))
 	    return new Readable(options);
@@ -70281,7 +70573,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(30)))
 
 /***/ },
-/* 110 */
+/* 109 */
 /***/ function(module, exports) {
 
 	module.exports = Array.isArray || function (arr) {
@@ -70290,13 +70582,13 @@
 
 
 /***/ },
-/* 111 */
+/* 110 */
 /***/ function(module, exports) {
 
 	/* (ignored) */
 
 /***/ },
-/* 112 */
+/* 111 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(process) {// Copyright Joyent, Inc. and other Node contributors.
@@ -70349,7 +70641,7 @@
 	}
 	
 	function WritableState(options, stream) {
-	  var Duplex = __webpack_require__(108);
+	  var Duplex = __webpack_require__(107);
 	
 	  options = options || {};
 	
@@ -70437,7 +70729,7 @@
 	}
 	
 	function Writable(options) {
-	  var Duplex = __webpack_require__(108);
+	  var Duplex = __webpack_require__(107);
 	
 	  // Writable ctor is applied to Duplexes, though they're not
 	  // instanceof Writable, they're instanceof Readable.
@@ -70780,14 +71072,14 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(30)))
 
 /***/ },
-/* 113 */
+/* 112 */
 /***/ function(module, exports, __webpack_require__) {
 
-	/* WEBPACK VAR INJECTION */(function(process, Buffer) {var msg = __webpack_require__(114);
-	var zstream = __webpack_require__(115);
-	var zlib_deflate = __webpack_require__(116);
-	var zlib_inflate = __webpack_require__(121);
-	var constants = __webpack_require__(124);
+	/* WEBPACK VAR INJECTION */(function(process, Buffer) {var msg = __webpack_require__(113);
+	var zstream = __webpack_require__(114);
+	var zlib_deflate = __webpack_require__(115);
+	var zlib_inflate = __webpack_require__(120);
+	var constants = __webpack_require__(123);
 	
 	for (var key in constants) {
 	  exports[key] = constants[key];
@@ -71023,15 +71315,15 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(30), __webpack_require__(16).Buffer))
 
 /***/ },
-/* 114 */
+/* 113 */
 /***/ function(module, exports) {
 
 	'use strict';
 	
 	module.exports = {
-	  '2':    'need dictionary',     /* Z_NEED_DICT       2  */
-	  '1':    'stream end',          /* Z_STREAM_END      1  */
-	  '0':    '',                    /* Z_OK              0  */
+	  2:      'need dictionary',     /* Z_NEED_DICT       2  */
+	  1:      'stream end',          /* Z_STREAM_END      1  */
+	  0:      '',                    /* Z_OK              0  */
 	  '-1':   'file error',          /* Z_ERRNO         (-1) */
 	  '-2':   'stream error',        /* Z_STREAM_ERROR  (-2) */
 	  '-3':   'data error',          /* Z_DATA_ERROR    (-3) */
@@ -71042,7 +71334,7 @@
 
 
 /***/ },
-/* 115 */
+/* 114 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -71077,16 +71369,16 @@
 
 
 /***/ },
-/* 116 */
+/* 115 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 	
-	var utils   = __webpack_require__(117);
-	var trees   = __webpack_require__(118);
-	var adler32 = __webpack_require__(119);
-	var crc32   = __webpack_require__(120);
-	var msg   = __webpack_require__(114);
+	var utils   = __webpack_require__(116);
+	var trees   = __webpack_require__(117);
+	var adler32 = __webpack_require__(118);
+	var crc32   = __webpack_require__(119);
+	var msg     = __webpack_require__(113);
 	
 	/* Public constants ==========================================================*/
 	/* ===========================================================================*/
@@ -71159,7 +71451,7 @@
 	/* number of distance codes */
 	var BL_CODES      = 19;
 	/* number of codes used to transfer the bit lengths */
-	var HEAP_SIZE     = 2*L_CODES + 1;
+	var HEAP_SIZE     = 2 * L_CODES + 1;
 	/* maximum heap size */
 	var MAX_BITS  = 15;
 	/* All codes must not exceed MAX_BITS bits */
@@ -71225,7 +71517,7 @@
 	}
 	
 	
-	function flush_block_only (s, last) {
+	function flush_block_only(s, last) {
 	  trees._tr_flush_block(s, (s.block_start >= 0 ? s.block_start : -1), s.strstart - s.block_start, last);
 	  s.block_start = s.strstart;
 	  flush_pending(s.strm);
@@ -71265,6 +71557,7 @@
 	
 	  strm.avail_in -= len;
 	
+	  // zmemcpy(buf, strm->next_in, len);
 	  utils.arraySet(buf, strm.input, strm.next_in, len, start);
 	  if (strm.state.wrap === 1) {
 	    strm.adler = adler32(strm.adler, buf, len, start);
@@ -71495,7 +71788,7 @@
 	//#endif
 	      while (s.insert) {
 	        /* UPDATE_HASH(s, s->ins_h, s->window[str + MIN_MATCH-1]); */
-	        s.ins_h = ((s.ins_h << s.hash_shift) ^ s.window[str + MIN_MATCH-1]) & s.hash_mask;
+	        s.ins_h = ((s.ins_h << s.hash_shift) ^ s.window[str + MIN_MATCH - 1]) & s.hash_mask;
 	
 	        s.prev[str & s.w_mask] = s.head[s.ins_h];
 	        s.head[s.ins_h] = str;
@@ -71759,7 +72052,7 @@
 	      /***/
 	    }
 	  }
-	  s.insert = ((s.strstart < (MIN_MATCH-1)) ? s.strstart : MIN_MATCH-1);
+	  s.insert = ((s.strstart < (MIN_MATCH - 1)) ? s.strstart : MIN_MATCH - 1);
 	  if (flush === Z_FINISH) {
 	    /*** FLUSH_BLOCK(s, 1); ***/
 	    flush_block_only(s, true);
@@ -71822,10 +72115,10 @@
 	     */
 	    s.prev_length = s.match_length;
 	    s.prev_match = s.match_start;
-	    s.match_length = MIN_MATCH-1;
+	    s.match_length = MIN_MATCH - 1;
 	
 	    if (hash_head !== 0/*NIL*/ && s.prev_length < s.max_lazy_match &&
-	        s.strstart - hash_head <= (s.w_size-MIN_LOOKAHEAD)/*MAX_DIST(s)*/) {
+	        s.strstart - hash_head <= (s.w_size - MIN_LOOKAHEAD)/*MAX_DIST(s)*/) {
 	      /* To simplify the code, we prevent matches with the string
 	       * of window index 0 (in particular we have to avoid a match
 	       * of the string with itself at the start of the input file).
@@ -71839,7 +72132,7 @@
 	        /* If prev_match is also MIN_MATCH, match_start is garbage
 	         * but we will ignore the current match anyway.
 	         */
-	        s.match_length = MIN_MATCH-1;
+	        s.match_length = MIN_MATCH - 1;
 	      }
 	    }
 	    /* If there was a match at the previous step and the current
@@ -71853,13 +72146,13 @@
 	
 	      /***_tr_tally_dist(s, s.strstart - 1 - s.prev_match,
 	                     s.prev_length - MIN_MATCH, bflush);***/
-	      bflush = trees._tr_tally(s, s.strstart - 1- s.prev_match, s.prev_length - MIN_MATCH);
+	      bflush = trees._tr_tally(s, s.strstart - 1 - s.prev_match, s.prev_length - MIN_MATCH);
 	      /* Insert in hash table all strings up to the end of the match.
 	       * strstart-1 and strstart are already inserted. If there is not
 	       * enough lookahead, the last two strings are not inserted in
 	       * the hash table.
 	       */
-	      s.lookahead -= s.prev_length-1;
+	      s.lookahead -= s.prev_length - 1;
 	      s.prev_length -= 2;
 	      do {
 	        if (++s.strstart <= max_insert) {
@@ -71871,7 +72164,7 @@
 	        }
 	      } while (--s.prev_length !== 0);
 	      s.match_available = 0;
-	      s.match_length = MIN_MATCH-1;
+	      s.match_length = MIN_MATCH - 1;
 	      s.strstart++;
 	
 	      if (bflush) {
@@ -71890,7 +72183,7 @@
 	       */
 	      //Tracevv((stderr,"%c", s->window[s->strstart-1]));
 	      /*** _tr_tally_lit(s, s.window[s.strstart-1], bflush); ***/
-	      bflush = trees._tr_tally(s, 0, s.window[s.strstart-1]);
+	      bflush = trees._tr_tally(s, 0, s.window[s.strstart - 1]);
 	
 	      if (bflush) {
 	        /*** FLUSH_BLOCK_ONLY(s, 0) ***/
@@ -71915,11 +72208,11 @@
 	  if (s.match_available) {
 	    //Tracevv((stderr,"%c", s->window[s->strstart-1]));
 	    /*** _tr_tally_lit(s, s.window[s.strstart-1], bflush); ***/
-	    bflush = trees._tr_tally(s, 0, s.window[s.strstart-1]);
+	    bflush = trees._tr_tally(s, 0, s.window[s.strstart - 1]);
 	
 	    s.match_available = 0;
 	  }
-	  s.insert = s.strstart < MIN_MATCH-1 ? s.strstart : MIN_MATCH-1;
+	  s.insert = s.strstart < MIN_MATCH - 1 ? s.strstart : MIN_MATCH - 1;
 	  if (flush === Z_FINISH) {
 	    /*** FLUSH_BLOCK(s, 1); ***/
 	    flush_block_only(s, true);
@@ -72099,13 +72392,13 @@
 	 * exclude worst case performance for pathological files. Better values may be
 	 * found for specific files.
 	 */
-	var Config = function (good_length, max_lazy, nice_length, max_chain, func) {
+	function Config(good_length, max_lazy, nice_length, max_chain, func) {
 	  this.good_length = good_length;
 	  this.max_lazy = max_lazy;
 	  this.nice_length = nice_length;
 	  this.max_chain = max_chain;
 	  this.func = func;
-	};
+	}
 	
 	var configuration_table;
 	
@@ -72255,8 +72548,8 @@
 	  // Use flat array of DOUBLE size, with interleaved fata,
 	  // because JS does not support effective
 	  this.dyn_ltree  = new utils.Buf16(HEAP_SIZE * 2);
-	  this.dyn_dtree  = new utils.Buf16((2*D_CODES+1) * 2);
-	  this.bl_tree    = new utils.Buf16((2*BL_CODES+1) * 2);
+	  this.dyn_dtree  = new utils.Buf16((2 * D_CODES + 1) * 2);
+	  this.bl_tree    = new utils.Buf16((2 * BL_CODES + 1) * 2);
 	  zero(this.dyn_ltree);
 	  zero(this.dyn_dtree);
 	  zero(this.bl_tree);
@@ -72266,11 +72559,11 @@
 	  this.bl_desc  = null;         /* desc. for bit length tree */
 	
 	  //ush bl_count[MAX_BITS+1];
-	  this.bl_count = new utils.Buf16(MAX_BITS+1);
+	  this.bl_count = new utils.Buf16(MAX_BITS + 1);
 	  /* number of codes at each bit length for an optimal tree */
 	
 	  //int heap[2*L_CODES+1];      /* heap used to build the Huffman trees */
-	  this.heap = new utils.Buf16(2*L_CODES+1);  /* heap used to build the Huffman trees */
+	  this.heap = new utils.Buf16(2 * L_CODES + 1);  /* heap used to build the Huffman trees */
 	  zero(this.heap);
 	
 	  this.heap_len = 0;               /* number of elements in the heap */
@@ -72279,7 +72572,7 @@
 	   * The same heap array is used to build all trees.
 	   */
 	
-	  this.depth = new utils.Buf16(2*L_CODES+1); //uch depth[2*L_CODES+1];
+	  this.depth = new utils.Buf16(2 * L_CODES + 1); //uch depth[2*L_CODES+1];
 	  zero(this.depth);
 	  /* Depth of each subtree used as tie breaker for trees of equal frequency
 	   */
@@ -72445,9 +72738,16 @@
 	  s.lit_bufsize = 1 << (memLevel + 6); /* 16K elements by default */
 	
 	  s.pending_buf_size = s.lit_bufsize * 4;
+	
+	  //overlay = (ushf *) ZALLOC(strm, s->lit_bufsize, sizeof(ush)+2);
+	  //s->pending_buf = (uchf *) overlay;
 	  s.pending_buf = new utils.Buf8(s.pending_buf_size);
 	
-	  s.d_buf = s.lit_bufsize >> 1;
+	  // It is offset from `s.pending_buf` (size is `s.lit_bufsize * 2`)
+	  //s->d_buf = overlay + s->lit_bufsize/sizeof(ush);
+	  s.d_buf = 1 * s.lit_bufsize;
+	
+	  //s->l_buf = s->pending_buf + (1+sizeof(ush))*s->lit_bufsize;
 	  s.l_buf = (1 + 2) * s.lit_bufsize;
 	
 	  s.level = level;
@@ -72820,12 +73120,94 @@
 	  return status === BUSY_STATE ? err(strm, Z_DATA_ERROR) : Z_OK;
 	}
 	
+	
 	/* =========================================================================
-	 * Copy the source state to the destination state
+	 * Initializes the compression dictionary from the given byte
+	 * sequence without producing any compressed output.
 	 */
-	//function deflateCopy(dest, source) {
-	//
-	//}
+	function deflateSetDictionary(strm, dictionary) {
+	  var dictLength = dictionary.length;
+	
+	  var s;
+	  var str, n;
+	  var wrap;
+	  var avail;
+	  var next;
+	  var input;
+	  var tmpDict;
+	
+	  if (!strm/*== Z_NULL*/ || !strm.state/*== Z_NULL*/) {
+	    return Z_STREAM_ERROR;
+	  }
+	
+	  s = strm.state;
+	  wrap = s.wrap;
+	
+	  if (wrap === 2 || (wrap === 1 && s.status !== INIT_STATE) || s.lookahead) {
+	    return Z_STREAM_ERROR;
+	  }
+	
+	  /* when using zlib wrappers, compute Adler-32 for provided dictionary */
+	  if (wrap === 1) {
+	    /* adler32(strm->adler, dictionary, dictLength); */
+	    strm.adler = adler32(strm.adler, dictionary, dictLength, 0);
+	  }
+	
+	  s.wrap = 0;   /* avoid computing Adler-32 in read_buf */
+	
+	  /* if dictionary would fill window, just replace the history */
+	  if (dictLength >= s.w_size) {
+	    if (wrap === 0) {            /* already empty otherwise */
+	      /*** CLEAR_HASH(s); ***/
+	      zero(s.head); // Fill with NIL (= 0);
+	      s.strstart = 0;
+	      s.block_start = 0;
+	      s.insert = 0;
+	    }
+	    /* use the tail */
+	    // dictionary = dictionary.slice(dictLength - s.w_size);
+	    tmpDict = new utils.Buf8(s.w_size);
+	    utils.arraySet(tmpDict, dictionary, dictLength - s.w_size, s.w_size, 0);
+	    dictionary = tmpDict;
+	    dictLength = s.w_size;
+	  }
+	  /* insert dictionary into window and hash */
+	  avail = strm.avail_in;
+	  next = strm.next_in;
+	  input = strm.input;
+	  strm.avail_in = dictLength;
+	  strm.next_in = 0;
+	  strm.input = dictionary;
+	  fill_window(s);
+	  while (s.lookahead >= MIN_MATCH) {
+	    str = s.strstart;
+	    n = s.lookahead - (MIN_MATCH - 1);
+	    do {
+	      /* UPDATE_HASH(s, s->ins_h, s->window[str + MIN_MATCH-1]); */
+	      s.ins_h = ((s.ins_h << s.hash_shift) ^ s.window[str + MIN_MATCH - 1]) & s.hash_mask;
+	
+	      s.prev[str & s.w_mask] = s.head[s.ins_h];
+	
+	      s.head[s.ins_h] = str;
+	      str++;
+	    } while (--n);
+	    s.strstart = str;
+	    s.lookahead = MIN_MATCH - 1;
+	    fill_window(s);
+	  }
+	  s.strstart += s.lookahead;
+	  s.block_start = s.strstart;
+	  s.insert = s.lookahead;
+	  s.lookahead = 0;
+	  s.match_length = s.prev_length = MIN_MATCH - 1;
+	  s.match_available = 0;
+	  strm.next_in = next;
+	  strm.input = input;
+	  strm.avail_in = avail;
+	  s.wrap = wrap;
+	  return Z_OK;
+	}
+	
 	
 	exports.deflateInit = deflateInit;
 	exports.deflateInit2 = deflateInit2;
@@ -72834,12 +73216,12 @@
 	exports.deflateSetHeader = deflateSetHeader;
 	exports.deflate = deflate;
 	exports.deflateEnd = deflateEnd;
+	exports.deflateSetDictionary = deflateSetDictionary;
 	exports.deflateInfo = 'pako deflate (from Nodeca project)';
 	
 	/* Not implemented
 	exports.deflateBound = deflateBound;
 	exports.deflateCopy = deflateCopy;
-	exports.deflateSetDictionary = deflateSetDictionary;
 	exports.deflateParams = deflateParams;
 	exports.deflatePending = deflatePending;
 	exports.deflatePrime = deflatePrime;
@@ -72848,7 +73230,7 @@
 
 
 /***/ },
-/* 117 */
+/* 116 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -72892,28 +73274,28 @@
 	var fnTyped = {
 	  arraySet: function (dest, src, src_offs, len, dest_offs) {
 	    if (src.subarray && dest.subarray) {
-	      dest.set(src.subarray(src_offs, src_offs+len), dest_offs);
+	      dest.set(src.subarray(src_offs, src_offs + len), dest_offs);
 	      return;
 	    }
 	    // Fallback to ordinary array
-	    for (var i=0; i<len; i++) {
+	    for (var i = 0; i < len; i++) {
 	      dest[dest_offs + i] = src[src_offs + i];
 	    }
 	  },
 	  // Join array of chunks to single array.
-	  flattenChunks: function(chunks) {
+	  flattenChunks: function (chunks) {
 	    var i, l, len, pos, chunk, result;
 	
 	    // calculate data length
 	    len = 0;
-	    for (i=0, l=chunks.length; i<l; i++) {
+	    for (i = 0, l = chunks.length; i < l; i++) {
 	      len += chunks[i].length;
 	    }
 	
 	    // join chunks
 	    result = new Uint8Array(len);
 	    pos = 0;
-	    for (i=0, l=chunks.length; i<l; i++) {
+	    for (i = 0, l = chunks.length; i < l; i++) {
 	      chunk = chunks[i];
 	      result.set(chunk, pos);
 	      pos += chunk.length;
@@ -72925,12 +73307,12 @@
 	
 	var fnUntyped = {
 	  arraySet: function (dest, src, src_offs, len, dest_offs) {
-	    for (var i=0; i<len; i++) {
+	    for (var i = 0; i < len; i++) {
 	      dest[dest_offs + i] = src[src_offs + i];
 	    }
 	  },
 	  // Join array of chunks to single array.
-	  flattenChunks: function(chunks) {
+	  flattenChunks: function (chunks) {
 	    return [].concat.apply([], chunks);
 	  }
 	};
@@ -72956,13 +73338,13 @@
 
 
 /***/ },
-/* 118 */
+/* 117 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 	
 	
-	var utils = __webpack_require__(117);
+	var utils = __webpack_require__(116);
 	
 	/* Public constants ==========================================================*/
 	/* ===========================================================================*/
@@ -73016,7 +73398,7 @@
 	var BL_CODES      = 19;
 	/* number of codes used to transfer the bit lengths */
 	
-	var HEAP_SIZE     = 2*L_CODES + 1;
+	var HEAP_SIZE     = 2 * L_CODES + 1;
 	/* maximum heap size */
 	
 	var MAX_BITS      = 15;
@@ -73045,6 +73427,7 @@
 	var REPZ_11_138 = 18;
 	/* repeat a zero length 11-138 times  (7 bits of repeat count) */
 	
+	/* eslint-disable comma-spacing,array-bracket-spacing */
 	var extra_lbits =   /* extra bits for each length code */
 	  [0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0];
 	
@@ -73056,6 +73439,8 @@
 	
 	var bl_order =
 	  [16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15];
+	/* eslint-enable comma-spacing,array-bracket-spacing */
+	
 	/* The lengths of the bit length codes are sent in order of decreasing
 	 * probability, to avoid transmitting the lengths for unused bit length codes.
 	 */
@@ -73069,7 +73454,7 @@
 	var DIST_CODE_LEN = 512; /* see definition of array dist_code below */
 	
 	// !!!! Use flat array insdead of structure, Freq = i*2, Len = i*2+1
-	var static_ltree  = new Array((L_CODES+2) * 2);
+	var static_ltree  = new Array((L_CODES + 2) * 2);
 	zero(static_ltree);
 	/* The static literal tree. Since the bit lengths are imposed, there is no
 	 * need for the L_CODES extra codes used during heap construction. However
@@ -73090,7 +73475,7 @@
 	 * the 15 bit distances.
 	 */
 	
-	var _length_code  = new Array(MAX_MATCH-MIN_MATCH+1);
+	var _length_code  = new Array(MAX_MATCH - MIN_MATCH + 1);
 	zero(_length_code);
 	/* length code for each normalized match length (0 == MIN_MATCH) */
 	
@@ -73103,7 +73488,7 @@
 	/* First normalized distance for each code (0 = distance of 1) */
 	
 	
-	var StaticTreeDesc = function (static_tree, extra_bits, extra_base, elems, max_length) {
+	function StaticTreeDesc(static_tree, extra_bits, extra_base, elems, max_length) {
 	
 	  this.static_tree  = static_tree;  /* static tree or NULL */
 	  this.extra_bits   = extra_bits;   /* extra bits for each code or NULL */
@@ -73113,7 +73498,7 @@
 	
 	  // show if `static_tree` has data or dummy - needed for monomorphic objects
 	  this.has_stree    = static_tree && static_tree.length;
-	};
+	}
 	
 	
 	var static_l_desc;
@@ -73121,11 +73506,11 @@
 	var static_bl_desc;
 	
 	
-	var TreeDesc = function(dyn_tree, stat_desc) {
+	function TreeDesc(dyn_tree, stat_desc) {
 	  this.dyn_tree = dyn_tree;     /* the dynamic tree */
 	  this.max_code = 0;            /* largest code with non zero frequency */
 	  this.stat_desc = stat_desc;   /* the corresponding static tree */
-	};
+	}
 	
 	
 	
@@ -73138,7 +73523,7 @@
 	 * Output a short LSB first on the stream.
 	 * IN assertion: there is enough room in pendingBuf.
 	 */
-	function put_short (s, w) {
+	function put_short(s, w) {
 	//    put_byte(s, (uch)((w) & 0xff));
 	//    put_byte(s, (uch)((ush)(w) >> 8));
 	  s.pending_buf[s.pending++] = (w) & 0xff;
@@ -73164,7 +73549,7 @@
 	
 	
 	function send_code(s, c, tree) {
-	  send_bits(s, tree[c*2]/*.Code*/, tree[c*2 + 1]/*.Len*/);
+	  send_bits(s, tree[c * 2]/*.Code*/, tree[c * 2 + 1]/*.Len*/);
 	}
 	
 	
@@ -73236,16 +73621,16 @@
 	  /* In a first pass, compute the optimal bit lengths (which may
 	   * overflow in the case of the bit length tree).
 	   */
-	  tree[s.heap[s.heap_max]*2 + 1]/*.Len*/ = 0; /* root of the heap */
+	  tree[s.heap[s.heap_max] * 2 + 1]/*.Len*/ = 0; /* root of the heap */
 	
-	  for (h = s.heap_max+1; h < HEAP_SIZE; h++) {
+	  for (h = s.heap_max + 1; h < HEAP_SIZE; h++) {
 	    n = s.heap[h];
-	    bits = tree[tree[n*2 +1]/*.Dad*/ * 2 + 1]/*.Len*/ + 1;
+	    bits = tree[tree[n * 2 + 1]/*.Dad*/ * 2 + 1]/*.Len*/ + 1;
 	    if (bits > max_length) {
 	      bits = max_length;
 	      overflow++;
 	    }
-	    tree[n*2 + 1]/*.Len*/ = bits;
+	    tree[n * 2 + 1]/*.Len*/ = bits;
 	    /* We overwrite tree[n].Dad which is no longer needed */
 	
 	    if (n > max_code) { continue; } /* not a leaf node */
@@ -73253,12 +73638,12 @@
 	    s.bl_count[bits]++;
 	    xbits = 0;
 	    if (n >= base) {
-	      xbits = extra[n-base];
+	      xbits = extra[n - base];
 	    }
 	    f = tree[n * 2]/*.Freq*/;
 	    s.opt_len += f * (bits + xbits);
 	    if (has_stree) {
-	      s.static_len += f * (stree[n*2 + 1]/*.Len*/ + xbits);
+	      s.static_len += f * (stree[n * 2 + 1]/*.Len*/ + xbits);
 	    }
 	  }
 	  if (overflow === 0) { return; }
@@ -73268,10 +73653,10 @@
 	
 	  /* Find the first bit length which could increase: */
 	  do {
-	    bits = max_length-1;
+	    bits = max_length - 1;
 	    while (s.bl_count[bits] === 0) { bits--; }
 	    s.bl_count[bits]--;      /* move one leaf down the tree */
-	    s.bl_count[bits+1] += 2; /* move one overflow item as its brother */
+	    s.bl_count[bits + 1] += 2; /* move one overflow item as its brother */
 	    s.bl_count[max_length]--;
 	    /* The brother of the overflow item also moves one step up,
 	     * but this does not affect bl_count[max_length]
@@ -73289,10 +73674,10 @@
 	    while (n !== 0) {
 	      m = s.heap[--h];
 	      if (m > max_code) { continue; }
-	      if (tree[m*2 + 1]/*.Len*/ !== bits) {
+	      if (tree[m * 2 + 1]/*.Len*/ !== bits) {
 	        // Trace((stderr,"code %d bits %d->%d\n", m, tree[m].Len, bits));
-	        s.opt_len += (bits - tree[m*2 + 1]/*.Len*/)*tree[m*2]/*.Freq*/;
-	        tree[m*2 + 1]/*.Len*/ = bits;
+	        s.opt_len += (bits - tree[m * 2 + 1]/*.Len*/) * tree[m * 2]/*.Freq*/;
+	        tree[m * 2 + 1]/*.Len*/ = bits;
 	      }
 	      n--;
 	    }
@@ -73313,7 +73698,7 @@
 	//    int max_code;              /* largest code with non zero frequency */
 	//    ushf *bl_count;            /* number of codes at each bit length */
 	{
-	  var next_code = new Array(MAX_BITS+1); /* next code value for each bit length */
+	  var next_code = new Array(MAX_BITS + 1); /* next code value for each bit length */
 	  var code = 0;              /* running code value */
 	  var bits;                  /* bit index */
 	  var n;                     /* code index */
@@ -73322,7 +73707,7 @@
 	   * without bit reversal.
 	   */
 	  for (bits = 1; bits <= MAX_BITS; bits++) {
-	    next_code[bits] = code = (code + bl_count[bits-1]) << 1;
+	    next_code[bits] = code = (code + bl_count[bits - 1]) << 1;
 	  }
 	  /* Check that the bit counts in bl_count are consistent. The last code
 	   * must be all ones.
@@ -73332,10 +73717,10 @@
 	  //Tracev((stderr,"\ngen_codes: max_code %d ", max_code));
 	
 	  for (n = 0;  n <= max_code; n++) {
-	    var len = tree[n*2 + 1]/*.Len*/;
+	    var len = tree[n * 2 + 1]/*.Len*/;
 	    if (len === 0) { continue; }
 	    /* Now reverse the bits */
-	    tree[n*2]/*.Code*/ = bi_reverse(next_code[len]++, len);
+	    tree[n * 2]/*.Code*/ = bi_reverse(next_code[len]++, len);
 	
 	    //Tracecv(tree != static_ltree, (stderr,"\nn %3d %c l %2d c %4x (%x) ",
 	    //     n, (isgraph(n) ? n : ' '), len, tree[n].Code, next_code[len]-1));
@@ -73352,7 +73737,7 @@
 	  var length;   /* length value */
 	  var code;     /* code value */
 	  var dist;     /* distance index */
-	  var bl_count = new Array(MAX_BITS+1);
+	  var bl_count = new Array(MAX_BITS + 1);
 	  /* number of codes at each bit length for an optimal tree */
 	
 	  // do check in _tr_init()
@@ -73369,9 +73754,9 @@
 	
 	  /* Initialize the mapping length (0..255) -> length code (0..28) */
 	  length = 0;
-	  for (code = 0; code < LENGTH_CODES-1; code++) {
+	  for (code = 0; code < LENGTH_CODES - 1; code++) {
 	    base_length[code] = length;
-	    for (n = 0; n < (1<<extra_lbits[code]); n++) {
+	    for (n = 0; n < (1 << extra_lbits[code]); n++) {
 	      _length_code[length++] = code;
 	    }
 	  }
@@ -73380,13 +73765,13 @@
 	   * in two different ways: code 284 + 5 bits or code 285, so we
 	   * overwrite length_code[255] to use the best encoding:
 	   */
-	  _length_code[length-1] = code;
+	  _length_code[length - 1] = code;
 	
 	  /* Initialize the mapping dist (0..32K) -> dist code (0..29) */
 	  dist = 0;
-	  for (code = 0 ; code < 16; code++) {
+	  for (code = 0; code < 16; code++) {
 	    base_dist[code] = dist;
-	    for (n = 0; n < (1<<extra_dbits[code]); n++) {
+	    for (n = 0; n < (1 << extra_dbits[code]); n++) {
 	      _dist_code[dist++] = code;
 	    }
 	  }
@@ -73394,7 +73779,7 @@
 	  dist >>= 7; /* from now on, all distances are divided by 128 */
 	  for (; code < D_CODES; code++) {
 	    base_dist[code] = dist << 7;
-	    for (n = 0; n < (1<<(extra_dbits[code]-7)); n++) {
+	    for (n = 0; n < (1 << (extra_dbits[code] - 7)); n++) {
 	      _dist_code[256 + dist++] = code;
 	    }
 	  }
@@ -73407,22 +73792,22 @@
 	
 	  n = 0;
 	  while (n <= 143) {
-	    static_ltree[n*2 + 1]/*.Len*/ = 8;
+	    static_ltree[n * 2 + 1]/*.Len*/ = 8;
 	    n++;
 	    bl_count[8]++;
 	  }
 	  while (n <= 255) {
-	    static_ltree[n*2 + 1]/*.Len*/ = 9;
+	    static_ltree[n * 2 + 1]/*.Len*/ = 9;
 	    n++;
 	    bl_count[9]++;
 	  }
 	  while (n <= 279) {
-	    static_ltree[n*2 + 1]/*.Len*/ = 7;
+	    static_ltree[n * 2 + 1]/*.Len*/ = 7;
 	    n++;
 	    bl_count[7]++;
 	  }
 	  while (n <= 287) {
-	    static_ltree[n*2 + 1]/*.Len*/ = 8;
+	    static_ltree[n * 2 + 1]/*.Len*/ = 8;
 	    n++;
 	    bl_count[8]++;
 	  }
@@ -73430,18 +73815,18 @@
 	   * tree construction to get a canonical Huffman tree (longest code
 	   * all ones)
 	   */
-	  gen_codes(static_ltree, L_CODES+1, bl_count);
+	  gen_codes(static_ltree, L_CODES + 1, bl_count);
 	
 	  /* The static distance tree is trivial: */
 	  for (n = 0; n < D_CODES; n++) {
-	    static_dtree[n*2 + 1]/*.Len*/ = 5;
-	    static_dtree[n*2]/*.Code*/ = bi_reverse(n, 5);
+	    static_dtree[n * 2 + 1]/*.Len*/ = 5;
+	    static_dtree[n * 2]/*.Code*/ = bi_reverse(n, 5);
 	  }
 	
 	  // Now data ready and we can init static trees
-	  static_l_desc = new StaticTreeDesc(static_ltree, extra_lbits, LITERALS+1, L_CODES, MAX_BITS);
+	  static_l_desc = new StaticTreeDesc(static_ltree, extra_lbits, LITERALS + 1, L_CODES, MAX_BITS);
 	  static_d_desc = new StaticTreeDesc(static_dtree, extra_dbits, 0,          D_CODES, MAX_BITS);
-	  static_bl_desc =new StaticTreeDesc(new Array(0), extra_blbits, 0,         BL_CODES, MAX_BL_BITS);
+	  static_bl_desc = new StaticTreeDesc(new Array(0), extra_blbits, 0,         BL_CODES, MAX_BL_BITS);
 	
 	  //static_init_done = true;
 	}
@@ -73454,11 +73839,11 @@
 	  var n; /* iterates over tree elements */
 	
 	  /* Initialize the trees. */
-	  for (n = 0; n < L_CODES;  n++) { s.dyn_ltree[n*2]/*.Freq*/ = 0; }
-	  for (n = 0; n < D_CODES;  n++) { s.dyn_dtree[n*2]/*.Freq*/ = 0; }
-	  for (n = 0; n < BL_CODES; n++) { s.bl_tree[n*2]/*.Freq*/ = 0; }
+	  for (n = 0; n < L_CODES;  n++) { s.dyn_ltree[n * 2]/*.Freq*/ = 0; }
+	  for (n = 0; n < D_CODES;  n++) { s.dyn_dtree[n * 2]/*.Freq*/ = 0; }
+	  for (n = 0; n < BL_CODES; n++) { s.bl_tree[n * 2]/*.Freq*/ = 0; }
 	
-	  s.dyn_ltree[END_BLOCK*2]/*.Freq*/ = 1;
+	  s.dyn_ltree[END_BLOCK * 2]/*.Freq*/ = 1;
 	  s.opt_len = s.static_len = 0;
 	  s.last_lit = s.matches = 0;
 	}
@@ -73507,8 +73892,8 @@
 	 * the subtrees have equal frequency. This minimizes the worst case length.
 	 */
 	function smaller(tree, n, m, depth) {
-	  var _n2 = n*2;
-	  var _m2 = m*2;
+	  var _n2 = n * 2;
+	  var _m2 = m * 2;
 	  return (tree[_n2]/*.Freq*/ < tree[_m2]/*.Freq*/ ||
 	         (tree[_n2]/*.Freq*/ === tree[_m2]/*.Freq*/ && depth[n] <= depth[m]));
 	}
@@ -73529,7 +73914,7 @@
 	  while (j <= s.heap_len) {
 	    /* Set j to the smallest of the two sons: */
 	    if (j < s.heap_len &&
-	      smaller(tree, s.heap[j+1], s.heap[j], s.depth)) {
+	      smaller(tree, s.heap[j + 1], s.heap[j], s.depth)) {
 	      j++;
 	    }
 	    /* Exit if v is smaller than both sons */
@@ -73565,7 +73950,7 @@
 	
 	  if (s.last_lit !== 0) {
 	    do {
-	      dist = (s.pending_buf[s.d_buf + lx*2] << 8) | (s.pending_buf[s.d_buf + lx*2 + 1]);
+	      dist = (s.pending_buf[s.d_buf + lx * 2] << 8) | (s.pending_buf[s.d_buf + lx * 2 + 1]);
 	      lc = s.pending_buf[s.l_buf + lx];
 	      lx++;
 	
@@ -73575,7 +73960,7 @@
 	      } else {
 	        /* Here, lc is the match length - MIN_MATCH */
 	        code = _length_code[lc];
-	        send_code(s, code+LITERALS+1, ltree); /* send the length code */
+	        send_code(s, code + LITERALS + 1, ltree); /* send the length code */
 	        extra = extra_lbits[code];
 	        if (extra !== 0) {
 	          lc -= base_length[code];
@@ -73637,7 +74022,7 @@
 	      s.depth[n] = 0;
 	
 	    } else {
-	      tree[n*2 + 1]/*.Len*/ = 0;
+	      tree[n * 2 + 1]/*.Len*/ = 0;
 	    }
 	  }
 	
@@ -73653,7 +74038,7 @@
 	    s.opt_len--;
 	
 	    if (has_stree) {
-	      s.static_len -= stree[node*2 + 1]/*.Len*/;
+	      s.static_len -= stree[node * 2 + 1]/*.Len*/;
 	    }
 	    /* node is 0 or 1 so it does not have extra bits */
 	  }
@@ -73684,7 +74069,7 @@
 	    /* Create a new node father of n and m */
 	    tree[node * 2]/*.Freq*/ = tree[n * 2]/*.Freq*/ + tree[m * 2]/*.Freq*/;
 	    s.depth[node] = (s.depth[n] >= s.depth[m] ? s.depth[n] : s.depth[m]) + 1;
-	    tree[n*2 + 1]/*.Dad*/ = tree[m*2 + 1]/*.Dad*/ = node;
+	    tree[n * 2 + 1]/*.Dad*/ = tree[m * 2 + 1]/*.Dad*/ = node;
 	
 	    /* and insert the new node in the heap */
 	    s.heap[1/*SMALLEST*/] = node++;
@@ -73717,7 +74102,7 @@
 	  var prevlen = -1;          /* last emitted length */
 	  var curlen;                /* length of current code */
 	
-	  var nextlen = tree[0*2 + 1]/*.Len*/; /* length of next code */
+	  var nextlen = tree[0 * 2 + 1]/*.Len*/; /* length of next code */
 	
 	  var count = 0;             /* repeat count of the current code */
 	  var max_count = 7;         /* max repeat count */
@@ -73727,11 +74112,11 @@
 	    max_count = 138;
 	    min_count = 3;
 	  }
-	  tree[(max_code+1)*2 + 1]/*.Len*/ = 0xffff; /* guard */
+	  tree[(max_code + 1) * 2 + 1]/*.Len*/ = 0xffff; /* guard */
 	
 	  for (n = 0; n <= max_code; n++) {
 	    curlen = nextlen;
-	    nextlen = tree[(n+1)*2 + 1]/*.Len*/;
+	    nextlen = tree[(n + 1) * 2 + 1]/*.Len*/;
 	
 	    if (++count < max_count && curlen === nextlen) {
 	      continue;
@@ -73742,13 +74127,13 @@
 	    } else if (curlen !== 0) {
 	
 	      if (curlen !== prevlen) { s.bl_tree[curlen * 2]/*.Freq*/++; }
-	      s.bl_tree[REP_3_6*2]/*.Freq*/++;
+	      s.bl_tree[REP_3_6 * 2]/*.Freq*/++;
 	
 	    } else if (count <= 10) {
-	      s.bl_tree[REPZ_3_10*2]/*.Freq*/++;
+	      s.bl_tree[REPZ_3_10 * 2]/*.Freq*/++;
 	
 	    } else {
-	      s.bl_tree[REPZ_11_138*2]/*.Freq*/++;
+	      s.bl_tree[REPZ_11_138 * 2]/*.Freq*/++;
 	    }
 	
 	    count = 0;
@@ -73783,7 +74168,7 @@
 	  var prevlen = -1;          /* last emitted length */
 	  var curlen;                /* length of current code */
 	
-	  var nextlen = tree[0*2 + 1]/*.Len*/; /* length of next code */
+	  var nextlen = tree[0 * 2 + 1]/*.Len*/; /* length of next code */
 	
 	  var count = 0;             /* repeat count of the current code */
 	  var max_count = 7;         /* max repeat count */
@@ -73797,7 +74182,7 @@
 	
 	  for (n = 0; n <= max_code; n++) {
 	    curlen = nextlen;
-	    nextlen = tree[(n+1)*2 + 1]/*.Len*/;
+	    nextlen = tree[(n + 1) * 2 + 1]/*.Len*/;
 	
 	    if (++count < max_count && curlen === nextlen) {
 	      continue;
@@ -73812,15 +74197,15 @@
 	      }
 	      //Assert(count >= 3 && count <= 6, " 3_6?");
 	      send_code(s, REP_3_6, s.bl_tree);
-	      send_bits(s, count-3, 2);
+	      send_bits(s, count - 3, 2);
 	
 	    } else if (count <= 10) {
 	      send_code(s, REPZ_3_10, s.bl_tree);
-	      send_bits(s, count-3, 3);
+	      send_bits(s, count - 3, 3);
 	
 	    } else {
 	      send_code(s, REPZ_11_138, s.bl_tree);
-	      send_bits(s, count-11, 7);
+	      send_bits(s, count - 11, 7);
 	    }
 	
 	    count = 0;
@@ -73862,13 +74247,13 @@
 	   * requires that at least 4 bit length codes be sent. (appnote.txt says
 	   * 3 but the actual value used is 4.)
 	   */
-	  for (max_blindex = BL_CODES-1; max_blindex >= 3; max_blindex--) {
-	    if (s.bl_tree[bl_order[max_blindex]*2 + 1]/*.Len*/ !== 0) {
+	  for (max_blindex = BL_CODES - 1; max_blindex >= 3; max_blindex--) {
+	    if (s.bl_tree[bl_order[max_blindex] * 2 + 1]/*.Len*/ !== 0) {
 	      break;
 	    }
 	  }
 	  /* Update opt_len to include the bit length tree and counts */
-	  s.opt_len += 3*(max_blindex+1) + 5+5+4;
+	  s.opt_len += 3 * (max_blindex + 1) + 5 + 5 + 4;
 	  //Tracev((stderr, "\ndyn trees: dyn %ld, stat %ld",
 	  //        s->opt_len, s->static_len));
 	
@@ -73891,19 +74276,19 @@
 	  //Assert (lcodes <= L_CODES && dcodes <= D_CODES && blcodes <= BL_CODES,
 	  //        "too many codes");
 	  //Tracev((stderr, "\nbl counts: "));
-	  send_bits(s, lcodes-257, 5); /* not +255 as stated in appnote.txt */
-	  send_bits(s, dcodes-1,   5);
-	  send_bits(s, blcodes-4,  4); /* not -3 as stated in appnote.txt */
+	  send_bits(s, lcodes - 257, 5); /* not +255 as stated in appnote.txt */
+	  send_bits(s, dcodes - 1,   5);
+	  send_bits(s, blcodes - 4,  4); /* not -3 as stated in appnote.txt */
 	  for (rank = 0; rank < blcodes; rank++) {
 	    //Tracev((stderr, "\nbl code %2d ", bl_order[rank]));
-	    send_bits(s, s.bl_tree[bl_order[rank]*2 + 1]/*.Len*/, 3);
+	    send_bits(s, s.bl_tree[bl_order[rank] * 2 + 1]/*.Len*/, 3);
 	  }
 	  //Tracev((stderr, "\nbl tree: sent %ld", s->bits_sent));
 	
-	  send_tree(s, s.dyn_ltree, lcodes-1); /* literal tree */
+	  send_tree(s, s.dyn_ltree, lcodes - 1); /* literal tree */
 	  //Tracev((stderr, "\nlit tree: sent %ld", s->bits_sent));
 	
-	  send_tree(s, s.dyn_dtree, dcodes-1); /* distance tree */
+	  send_tree(s, s.dyn_dtree, dcodes - 1); /* distance tree */
 	  //Tracev((stderr, "\ndist tree: sent %ld", s->bits_sent));
 	}
 	
@@ -73931,7 +74316,7 @@
 	
 	  /* Check for non-textual ("black-listed") bytes. */
 	  for (n = 0; n <= 31; n++, black_mask >>>= 1) {
-	    if ((black_mask & 1) && (s.dyn_ltree[n*2]/*.Freq*/ !== 0)) {
+	    if ((black_mask & 1) && (s.dyn_ltree[n * 2]/*.Freq*/ !== 0)) {
 	      return Z_BINARY;
 	    }
 	  }
@@ -73988,7 +74373,7 @@
 	//ulg stored_len;   /* length of input block */
 	//int last;         /* one if this is the last block for a file */
 	{
-	  send_bits(s, (STORED_BLOCK<<1)+(last ? 1 : 0), 3);    /* send block type */
+	  send_bits(s, (STORED_BLOCK << 1) + (last ? 1 : 0), 3);    /* send block type */
 	  copy_block(s, buf, stored_len, true); /* with header */
 	}
 	
@@ -73998,7 +74383,7 @@
 	 * This takes 10 bits, of which 7 may remain in the bit buffer.
 	 */
 	function _tr_align(s) {
-	  send_bits(s, STATIC_TREES<<1, 3);
+	  send_bits(s, STATIC_TREES << 1, 3);
 	  send_code(s, END_BLOCK, static_ltree);
 	  bi_flush(s);
 	}
@@ -74043,8 +74428,8 @@
 	    max_blindex = build_bl_tree(s);
 	
 	    /* Determine the best encoding. Compute the block lengths in bytes. */
-	    opt_lenb = (s.opt_len+3+7) >>> 3;
-	    static_lenb = (s.static_len+3+7) >>> 3;
+	    opt_lenb = (s.opt_len + 3 + 7) >>> 3;
+	    static_lenb = (s.static_len + 3 + 7) >>> 3;
 	
 	    // Tracev((stderr, "\nopt %lu(%lu) stat %lu(%lu) stored %lu lit %u ",
 	    //        opt_lenb, s->opt_len, static_lenb, s->static_len, stored_len,
@@ -74057,7 +74442,7 @@
 	    opt_lenb = static_lenb = stored_len + 5; /* force a stored block */
 	  }
 	
-	  if ((stored_len+4 <= opt_lenb) && (buf !== -1)) {
+	  if ((stored_len + 4 <= opt_lenb) && (buf !== -1)) {
 	    /* 4: two words for the lengths */
 	
 	    /* The test buf != NULL is only necessary if LIT_BUFSIZE > WSIZE.
@@ -74070,12 +74455,12 @@
 	
 	  } else if (s.strategy === Z_FIXED || static_lenb === opt_lenb) {
 	
-	    send_bits(s, (STATIC_TREES<<1) + (last ? 1 : 0), 3);
+	    send_bits(s, (STATIC_TREES << 1) + (last ? 1 : 0), 3);
 	    compress_block(s, static_ltree, static_dtree);
 	
 	  } else {
-	    send_bits(s, (DYN_TREES<<1) + (last ? 1 : 0), 3);
-	    send_all_trees(s, s.l_desc.max_code+1, s.d_desc.max_code+1, max_blindex+1);
+	    send_bits(s, (DYN_TREES << 1) + (last ? 1 : 0), 3);
+	    send_all_trees(s, s.l_desc.max_code + 1, s.d_desc.max_code + 1, max_blindex + 1);
 	    compress_block(s, s.dyn_ltree, s.dyn_dtree);
 	  }
 	  // Assert (s->compressed_len == s->bits_sent, "bad compressed size");
@@ -74110,7 +74495,7 @@
 	
 	  if (dist === 0) {
 	    /* lc is the unmatched char */
-	    s.dyn_ltree[lc*2]/*.Freq*/++;
+	    s.dyn_ltree[lc * 2]/*.Freq*/++;
 	  } else {
 	    s.matches++;
 	    /* Here, lc is the match length - MIN_MATCH */
@@ -74119,7 +74504,7 @@
 	    //       (ush)lc <= (ush)(MAX_MATCH-MIN_MATCH) &&
 	    //       (ush)d_code(dist) < (ush)D_CODES,  "_tr_tally: bad match");
 	
-	    s.dyn_ltree[(_length_code[lc]+LITERALS+1) * 2]/*.Freq*/++;
+	    s.dyn_ltree[(_length_code[lc] + LITERALS + 1) * 2]/*.Freq*/++;
 	    s.dyn_dtree[d_code(dist) * 2]/*.Freq*/++;
 	  }
 	
@@ -74146,7 +74531,7 @@
 	//  }
 	//#endif
 	
-	  return (s.last_lit === s.lit_bufsize-1);
+	  return (s.last_lit === s.lit_bufsize - 1);
 	  /* We avoid equality with lit_bufsize because of wraparound at 64K
 	   * on 16 bit machines and because stored blocks are restricted to
 	   * 64K-1 bytes.
@@ -74161,7 +74546,7 @@
 
 
 /***/ },
-/* 119 */
+/* 118 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -74199,7 +74584,7 @@
 
 
 /***/ },
-/* 120 */
+/* 119 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -74213,10 +74598,10 @@
 	function makeTable() {
 	  var c, table = [];
 	
-	  for (var n =0; n < 256; n++) {
+	  for (var n = 0; n < 256; n++) {
 	    c = n;
-	    for (var k =0; k < 8; k++) {
-	      c = ((c&1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1));
+	    for (var k = 0; k < 8; k++) {
+	      c = ((c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1));
 	    }
 	    table[n] = c;
 	  }
@@ -74232,7 +74617,7 @@
 	  var t = crcTable,
 	      end = pos + len;
 	
-	  crc = crc ^ (-1);
+	  crc ^= -1;
 	
 	  for (var i = pos; i < end; i++) {
 	    crc = (crc >>> 8) ^ t[(crc ^ buf[i]) & 0xFF];
@@ -74246,17 +74631,17 @@
 
 
 /***/ },
-/* 121 */
+/* 120 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 	
 	
-	var utils = __webpack_require__(117);
-	var adler32 = __webpack_require__(119);
-	var crc32   = __webpack_require__(120);
-	var inflate_fast = __webpack_require__(122);
-	var inflate_table = __webpack_require__(123);
+	var utils         = __webpack_require__(116);
+	var adler32       = __webpack_require__(118);
+	var crc32         = __webpack_require__(119);
+	var inflate_fast  = __webpack_require__(121);
+	var inflate_table = __webpack_require__(122);
 	
 	var CODES = 0;
 	var LENS = 1;
@@ -74343,7 +74728,7 @@
 	var DEF_WBITS = MAX_WBITS;
 	
 	
-	function ZSWAP32(q) {
+	function zswap32(q) {
 	  return  (((q >>> 24) & 0xff) +
 	          ((q >>> 8) & 0xff00) +
 	          ((q & 0xff00) << 8) +
@@ -74536,13 +74921,13 @@
 	    while (sym < 280) { state.lens[sym++] = 7; }
 	    while (sym < 288) { state.lens[sym++] = 8; }
 	
-	    inflate_table(LENS,  state.lens, 0, 288, lenfix,   0, state.work, {bits: 9});
+	    inflate_table(LENS,  state.lens, 0, 288, lenfix,   0, state.work, { bits: 9 });
 	
 	    /* distance table */
 	    sym = 0;
 	    while (sym < 32) { state.lens[sym++] = 5; }
 	
-	    inflate_table(DISTS, state.lens, 0, 32,   distfix, 0, state.work, {bits: 5});
+	    inflate_table(DISTS, state.lens, 0, 32,   distfix, 0, state.work, { bits: 5 });
 	
 	    /* do this just once */
 	    virgin = false;
@@ -74584,7 +74969,7 @@
 	
 	  /* copy state->wsize or less output bytes into the circular window */
 	  if (copy >= state.wsize) {
-	    utils.arraySet(state.window,src, end - state.wsize, state.wsize, 0);
+	    utils.arraySet(state.window, src, end - state.wsize, state.wsize, 0);
 	    state.wnext = 0;
 	    state.whave = state.wsize;
 	  }
@@ -74594,11 +74979,11 @@
 	      dist = copy;
 	    }
 	    //zmemcpy(state->window + state->wnext, end - copy, dist);
-	    utils.arraySet(state.window,src, end - copy, dist, state.wnext);
+	    utils.arraySet(state.window, src, end - copy, dist, state.wnext);
 	    copy -= dist;
 	    if (copy) {
 	      //zmemcpy(state->window, end - copy, copy);
-	      utils.arraySet(state.window,src, end - copy, copy, 0);
+	      utils.arraySet(state.window, src, end - copy, copy, 0);
 	      state.wnext = copy;
 	      state.whave = state.wsize;
 	    }
@@ -74635,7 +75020,7 @@
 	  var n; // temporary var for NEED_BITS
 	
 	  var order = /* permutation of code lengths */
-	    [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
+	    [ 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 ];
 	
 	
 	  if (!strm || !strm.state || !strm.output ||
@@ -74962,7 +75347,7 @@
 	        state.head.hcrc = ((state.flags >> 9) & 1);
 	        state.head.done = true;
 	      }
-	      strm.adler = state.check = 0 /*crc32(0L, Z_NULL, 0)*/;
+	      strm.adler = state.check = 0;
 	      state.mode = TYPE;
 	      break;
 	    case DICTID:
@@ -74974,7 +75359,7 @@
 	        bits += 8;
 	      }
 	      //===//
-	      strm.adler = state.check = ZSWAP32(hold);
+	      strm.adler = state.check = zswap32(hold);
 	      //=== INITBITS();
 	      hold = 0;
 	      bits = 0;
@@ -75166,7 +75551,7 @@
 	      state.lencode = state.lendyn;
 	      state.lenbits = 7;
 	
-	      opts = {bits: state.lenbits};
+	      opts = { bits: state.lenbits };
 	      ret = inflate_table(CODES, state.lens, 0, 19, state.lencode, 0, state.work, opts);
 	      state.lenbits = opts.bits;
 	
@@ -75297,7 +75682,7 @@
 	         concerning the ENOUGH constants, which depend on those values */
 	      state.lenbits = 9;
 	
-	      opts = {bits: state.lenbits};
+	      opts = { bits: state.lenbits };
 	      ret = inflate_table(LENS, state.lens, 0, state.nlen, state.lencode, 0, state.work, opts);
 	      // We have separate tables & no pointers. 2 commented lines below not needed.
 	      // state.next_index = opts.table_index;
@@ -75314,7 +75699,7 @@
 	      //state.distcode.copy(state.codes);
 	      // Switch to use dynamic table
 	      state.distcode = state.distdyn;
-	      opts = {bits: state.distbits};
+	      opts = { bits: state.distbits };
 	      ret = inflate_table(DISTS, state.lens, state.nlen, state.ndist, state.distcode, 0, state.work, opts);
 	      // We have separate tables & no pointers. 2 commented lines below not needed.
 	      // state.next_index = opts.table_index;
@@ -75362,7 +75747,7 @@
 	      }
 	      state.back = 0;
 	      for (;;) {
-	        here = state.lencode[hold & ((1 << state.lenbits) -1)];  /*BITS(state.lenbits)*/
+	        here = state.lencode[hold & ((1 << state.lenbits) - 1)];  /*BITS(state.lenbits)*/
 	        here_bits = here >>> 24;
 	        here_op = (here >>> 16) & 0xff;
 	        here_val = here & 0xffff;
@@ -75381,7 +75766,7 @@
 	        last_val = here_val;
 	        for (;;) {
 	          here = state.lencode[last_val +
-	                  ((hold & ((1 << (last_bits + last_op)) -1))/*BITS(last.bits + last.op)*/ >> last_bits)];
+	                  ((hold & ((1 << (last_bits + last_op)) - 1))/*BITS(last.bits + last.op)*/ >> last_bits)];
 	          here_bits = here >>> 24;
 	          here_op = (here >>> 16) & 0xff;
 	          here_val = here & 0xffff;
@@ -75438,7 +75823,7 @@
 	          bits += 8;
 	        }
 	        //===//
-	        state.length += hold & ((1 << state.extra) -1)/*BITS(state.extra)*/;
+	        state.length += hold & ((1 << state.extra) - 1)/*BITS(state.extra)*/;
 	        //--- DROPBITS(state.extra) ---//
 	        hold >>>= state.extra;
 	        bits -= state.extra;
@@ -75451,7 +75836,7 @@
 	      /* falls through */
 	    case DIST:
 	      for (;;) {
-	        here = state.distcode[hold & ((1 << state.distbits) -1)];/*BITS(state.distbits)*/
+	        here = state.distcode[hold & ((1 << state.distbits) - 1)];/*BITS(state.distbits)*/
 	        here_bits = here >>> 24;
 	        here_op = (here >>> 16) & 0xff;
 	        here_val = here & 0xffff;
@@ -75470,7 +75855,7 @@
 	        last_val = here_val;
 	        for (;;) {
 	          here = state.distcode[last_val +
-	                  ((hold & ((1 << (last_bits + last_op)) -1))/*BITS(last.bits + last.op)*/ >> last_bits)];
+	                  ((hold & ((1 << (last_bits + last_op)) - 1))/*BITS(last.bits + last.op)*/ >> last_bits)];
 	          here_bits = here >>> 24;
 	          here_op = (here >>> 16) & 0xff;
 	          here_val = here & 0xffff;
@@ -75514,7 +75899,7 @@
 	          bits += 8;
 	        }
 	        //===//
-	        state.offset += hold & ((1 << state.extra) -1)/*BITS(state.extra)*/;
+	        state.offset += hold & ((1 << state.extra) - 1)/*BITS(state.extra)*/;
 	        //--- DROPBITS(state.extra) ---//
 	        hold >>>= state.extra;
 	        bits -= state.extra;
@@ -75608,8 +75993,8 @@
 	
 	        }
 	        _out = left;
-	        // NB: crc32 stored as signed 32-bit int, ZSWAP32 returns signed too
-	        if ((state.flags ? hold : ZSWAP32(hold)) !== state.check) {
+	        // NB: crc32 stored as signed 32-bit int, zswap32 returns signed too
+	        if ((state.flags ? hold : zswap32(hold)) !== state.check) {
 	          strm.msg = 'incorrect data check';
 	          state.mode = BAD;
 	          break;
@@ -75731,6 +76116,41 @@
 	  return Z_OK;
 	}
 	
+	function inflateSetDictionary(strm, dictionary) {
+	  var dictLength = dictionary.length;
+	
+	  var state;
+	  var dictid;
+	  var ret;
+	
+	  /* check state */
+	  if (!strm /* == Z_NULL */ || !strm.state /* == Z_NULL */) { return Z_STREAM_ERROR; }
+	  state = strm.state;
+	
+	  if (state.wrap !== 0 && state.mode !== DICT) {
+	    return Z_STREAM_ERROR;
+	  }
+	
+	  /* check for correct dictionary identifier */
+	  if (state.mode === DICT) {
+	    dictid = 1; /* adler32(0, null, 0)*/
+	    /* dictid = adler32(dictid, dictionary, dictLength); */
+	    dictid = adler32(dictid, dictionary, dictLength, 0);
+	    if (dictid !== state.check) {
+	      return Z_DATA_ERROR;
+	    }
+	  }
+	  /* copy dictionary to window using updatewindow(), which will amend the
+	   existing dictionary if appropriate */
+	  ret = updatewindow(strm, dictionary, dictLength, dictLength);
+	  if (ret) {
+	    state.mode = MEM;
+	    return Z_MEM_ERROR;
+	  }
+	  state.havedict = 1;
+	  // Tracev((stderr, "inflate:   dictionary set\n"));
+	  return Z_OK;
+	}
 	
 	exports.inflateReset = inflateReset;
 	exports.inflateReset2 = inflateReset2;
@@ -75740,6 +76160,7 @@
 	exports.inflate = inflate;
 	exports.inflateEnd = inflateEnd;
 	exports.inflateGetHeader = inflateGetHeader;
+	exports.inflateSetDictionary = inflateSetDictionary;
 	exports.inflateInfo = 'pako inflate (from Nodeca project)';
 	
 	/* Not implemented
@@ -75747,7 +76168,6 @@
 	exports.inflateGetDictionary = inflateGetDictionary;
 	exports.inflateMark = inflateMark;
 	exports.inflatePrime = inflatePrime;
-	exports.inflateSetDictionary = inflateSetDictionary;
 	exports.inflateSync = inflateSync;
 	exports.inflateSyncPoint = inflateSyncPoint;
 	exports.inflateUndermine = inflateUndermine;
@@ -75755,7 +76175,7 @@
 
 
 /***/ },
-/* 122 */
+/* 121 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -76087,13 +76507,13 @@
 
 
 /***/ },
-/* 123 */
+/* 122 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 	
 	
-	var utils = __webpack_require__(117);
+	var utils = __webpack_require__(116);
 	
 	var MAXBITS = 15;
 	var ENOUGH_LENS = 852;
@@ -76149,8 +76569,8 @@
 	  var base_index = 0;
 	//  var shoextra;    /* extra bits table to use */
 	  var end;                    /* use base and extra for symbol > end */
-	  var count = new utils.Buf16(MAXBITS+1); //[MAXBITS+1];    /* number of codes of each length */
-	  var offs = new utils.Buf16(MAXBITS+1); //[MAXBITS+1];     /* offsets in table for each length */
+	  var count = new utils.Buf16(MAXBITS + 1); //[MAXBITS+1];    /* number of codes of each length */
+	  var offs = new utils.Buf16(MAXBITS + 1); //[MAXBITS+1];     /* offsets in table for each length */
 	  var extra = null;
 	  var extra_index = 0;
 	
@@ -76319,7 +76739,7 @@
 	    return 1;
 	  }
 	
-	  var i=0;
+	  var i = 0;
 	  /* process all codes and make table entries */
 	  for (;;) {
 	    i++;
@@ -76420,9 +76840,12 @@
 
 
 /***/ },
-/* 124 */
+/* 123 */
 /***/ function(module, exports) {
 
+	'use strict';
+	
+	
 	module.exports = {
 	
 	  /* Allowed flush values; see deflate() and inflate() below for details */
@@ -76473,9 +76896,53 @@
 
 
 /***/ },
-/* 125 */
+/* 124 */
 /***/ function(module, exports, __webpack_require__) {
 
+	/* WEBPACK VAR INJECTION */(function(global) {'use strict';
+	
+	// compare and isBuffer taken from https://github.com/feross/buffer/blob/680e9e5e488f22aac27599a57dc844a6315928dd/index.js
+	// original notice:
+	
+	/*!
+	 * The buffer module from node.js, for the browser.
+	 *
+	 * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
+	 * @license  MIT
+	 */
+	function compare(a, b) {
+	  if (a === b) {
+	    return 0;
+	  }
+	
+	  var x = a.length;
+	  var y = b.length;
+	
+	  for (var i = 0, len = Math.min(x, y); i < len; ++i) {
+	    if (a[i] !== b[i]) {
+	      x = a[i];
+	      y = b[i];
+	      break;
+	    }
+	  }
+	
+	  if (x < y) {
+	    return -1;
+	  }
+	  if (y < x) {
+	    return 1;
+	  }
+	  return 0;
+	}
+	function isBuffer(b) {
+	  if (global.Buffer && typeof global.Buffer.isBuffer === 'function') {
+	    return global.Buffer.isBuffer(b);
+	  }
+	  return !!(b != null && b._isBuffer);
+	}
+	
+	// based on node assert, original notice:
+	
 	// http://wiki.commonjs.org/wiki/Unit_Testing/1.0
 	//
 	// THIS IS NOT TESTED NOR LIKELY TO WORK OUTSIDE V8!
@@ -76500,14 +76967,36 @@
 	// ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 	// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	
-	// when used in node, this will actually load the util module we depend on
-	// versus loading the builtin util module as happens otherwise
-	// this is a bug in node module loading as far as I am concerned
-	var util = __webpack_require__(75);
-	
-	var pSlice = Array.prototype.slice;
+	var util = __webpack_require__(74);
 	var hasOwn = Object.prototype.hasOwnProperty;
-	
+	var pSlice = Array.prototype.slice;
+	var functionsHaveNames = (function () {
+	  return function foo() {}.name === 'foo';
+	}());
+	function pToString (obj) {
+	  return Object.prototype.toString.call(obj);
+	}
+	function isView(arrbuf) {
+	  if (isBuffer(arrbuf)) {
+	    return false;
+	  }
+	  if (typeof global.ArrayBuffer !== 'function') {
+	    return false;
+	  }
+	  if (typeof ArrayBuffer.isView === 'function') {
+	    return ArrayBuffer.isView(arrbuf);
+	  }
+	  if (!arrbuf) {
+	    return false;
+	  }
+	  if (arrbuf instanceof DataView) {
+	    return true;
+	  }
+	  if (arrbuf.buffer && arrbuf.buffer instanceof ArrayBuffer) {
+	    return true;
+	  }
+	  return false;
+	}
 	// 1. The assert module provides functions that throw
 	// AssertionError's when particular conditions are not met. The
 	// assert module must conform to the following interface.
@@ -76519,6 +77008,19 @@
 	//                             actual: actual,
 	//                             expected: expected })
 	
+	var regex = /\s*function\s+([^\(\s]*)\s*/;
+	// based on https://github.com/ljharb/function.prototype.name/blob/adeeeec8bfcc6068b187d7d9fb3d5bb1d3a30899/implementation.js
+	function getName(func) {
+	  if (!util.isFunction(func)) {
+	    return;
+	  }
+	  if (functionsHaveNames) {
+	    return func.name;
+	  }
+	  var str = func.toString();
+	  var match = str.match(regex);
+	  return match && match[1];
+	}
 	assert.AssertionError = function AssertionError(options) {
 	  this.name = 'AssertionError';
 	  this.actual = options.actual;
@@ -76532,18 +77034,16 @@
 	    this.generatedMessage = true;
 	  }
 	  var stackStartFunction = options.stackStartFunction || fail;
-	
 	  if (Error.captureStackTrace) {
 	    Error.captureStackTrace(this, stackStartFunction);
-	  }
-	  else {
+	  } else {
 	    // non v8 browsers so we can have a stacktrace
 	    var err = new Error();
 	    if (err.stack) {
 	      var out = err.stack;
 	
 	      // try to strip useless frames
-	      var fn_name = stackStartFunction.name;
+	      var fn_name = getName(stackStartFunction);
 	      var idx = out.indexOf('\n' + fn_name);
 	      if (idx >= 0) {
 	        // once we have located the function frame
@@ -76560,31 +77060,25 @@
 	// assert.AssertionError instanceof Error
 	util.inherits(assert.AssertionError, Error);
 	
-	function replacer(key, value) {
-	  if (util.isUndefined(value)) {
-	    return '' + value;
-	  }
-	  if (util.isNumber(value) && !isFinite(value)) {
-	    return value.toString();
-	  }
-	  if (util.isFunction(value) || util.isRegExp(value)) {
-	    return value.toString();
-	  }
-	  return value;
-	}
-	
 	function truncate(s, n) {
-	  if (util.isString(s)) {
+	  if (typeof s === 'string') {
 	    return s.length < n ? s : s.slice(0, n);
 	  } else {
 	    return s;
 	  }
 	}
-	
+	function inspect(something) {
+	  if (functionsHaveNames || !util.isFunction(something)) {
+	    return util.inspect(something);
+	  }
+	  var rawname = getName(something);
+	  var name = rawname ? ': ' + rawname : '';
+	  return '[Function' +  name + ']';
+	}
 	function getMessage(self) {
-	  return truncate(JSON.stringify(self.actual, replacer), 128) + ' ' +
+	  return truncate(inspect(self.actual), 128) + ' ' +
 	         self.operator + ' ' +
-	         truncate(JSON.stringify(self.expected, replacer), 128);
+	         truncate(inspect(self.expected), 128);
 	}
 	
 	// At present only the three keys mentioned above are used and
@@ -76644,24 +77138,23 @@
 	// assert.deepEqual(actual, expected, message_opt);
 	
 	assert.deepEqual = function deepEqual(actual, expected, message) {
-	  if (!_deepEqual(actual, expected)) {
+	  if (!_deepEqual(actual, expected, false)) {
 	    fail(actual, expected, message, 'deepEqual', assert.deepEqual);
 	  }
 	};
 	
-	function _deepEqual(actual, expected) {
+	assert.deepStrictEqual = function deepStrictEqual(actual, expected, message) {
+	  if (!_deepEqual(actual, expected, true)) {
+	    fail(actual, expected, message, 'deepStrictEqual', assert.deepStrictEqual);
+	  }
+	};
+	
+	function _deepEqual(actual, expected, strict, memos) {
 	  // 7.1. All identical values are equivalent, as determined by ===.
 	  if (actual === expected) {
 	    return true;
-	
-	  } else if (util.isBuffer(actual) && util.isBuffer(expected)) {
-	    if (actual.length != expected.length) return false;
-	
-	    for (var i = 0; i < actual.length; i++) {
-	      if (actual[i] !== expected[i]) return false;
-	    }
-	
-	    return true;
+	  } else if (isBuffer(actual) && isBuffer(expected)) {
+	    return compare(actual, expected) === 0;
 	
 	  // 7.2. If the expected value is a Date object, the actual value is
 	  // equivalent if it is also a Date object that refers to the same time.
@@ -76680,8 +77173,22 @@
 	
 	  // 7.4. Other pairs that do not both pass typeof value == 'object',
 	  // equivalence is determined by ==.
-	  } else if (!util.isObject(actual) && !util.isObject(expected)) {
-	    return actual == expected;
+	  } else if ((actual === null || typeof actual !== 'object') &&
+	             (expected === null || typeof expected !== 'object')) {
+	    return strict ? actual === expected : actual == expected;
+	
+	  // If both values are instances of typed arrays, wrap their underlying
+	  // ArrayBuffers in a Buffer each to increase performance
+	  // This optimization requires the arrays to have the same type as checked by
+	  // Object.prototype.toString (aka pToString). Never perform binary
+	  // comparisons for Float*Arrays, though, since e.g. +0 === -0 but their
+	  // bit patterns are not identical.
+	  } else if (isView(actual) && isView(expected) &&
+	             pToString(actual) === pToString(expected) &&
+	             !(actual instanceof Float32Array ||
+	               actual instanceof Float64Array)) {
+	    return compare(new Uint8Array(actual.buffer),
+	                   new Uint8Array(expected.buffer)) === 0;
 	
 	  // 7.5 For all other Object pairs, including Array objects, equivalence is
 	  // determined by having the same number of owned properties (as verified
@@ -76689,8 +77196,22 @@
 	  // (although not necessarily the same order), equivalent values for every
 	  // corresponding key, and an identical 'prototype' property. Note: this
 	  // accounts for both named and indexed properties on Arrays.
+	  } else if (isBuffer(actual) !== isBuffer(expected)) {
+	    return false;
 	  } else {
-	    return objEquiv(actual, expected);
+	    memos = memos || {actual: [], expected: []};
+	
+	    var actualIndex = memos.actual.indexOf(actual);
+	    if (actualIndex !== -1) {
+	      if (actualIndex === memos.expected.indexOf(expected)) {
+	        return true;
+	      }
+	    }
+	
+	    memos.actual.push(actual);
+	    memos.expected.push(expected);
+	
+	    return objEquiv(actual, expected, strict, memos);
 	  }
 	}
 	
@@ -76698,44 +77219,44 @@
 	  return Object.prototype.toString.call(object) == '[object Arguments]';
 	}
 	
-	function objEquiv(a, b) {
-	  if (util.isNullOrUndefined(a) || util.isNullOrUndefined(b))
+	function objEquiv(a, b, strict, actualVisitedObjects) {
+	  if (a === null || a === undefined || b === null || b === undefined)
 	    return false;
-	  // an identical 'prototype' property.
-	  if (a.prototype !== b.prototype) return false;
 	  // if one is a primitive, the other must be same
-	  if (util.isPrimitive(a) || util.isPrimitive(b)) {
+	  if (util.isPrimitive(a) || util.isPrimitive(b))
 	    return a === b;
-	  }
-	  var aIsArgs = isArguments(a),
-	      bIsArgs = isArguments(b);
+	  if (strict && Object.getPrototypeOf(a) !== Object.getPrototypeOf(b))
+	    return false;
+	  var aIsArgs = isArguments(a);
+	  var bIsArgs = isArguments(b);
 	  if ((aIsArgs && !bIsArgs) || (!aIsArgs && bIsArgs))
 	    return false;
 	  if (aIsArgs) {
 	    a = pSlice.call(a);
 	    b = pSlice.call(b);
-	    return _deepEqual(a, b);
+	    return _deepEqual(a, b, strict);
 	  }
-	  var ka = objectKeys(a),
-	      kb = objectKeys(b),
-	      key, i;
+	  var ka = objectKeys(a);
+	  var kb = objectKeys(b);
+	  var key, i;
 	  // having the same number of owned properties (keys incorporates
 	  // hasOwnProperty)
-	  if (ka.length != kb.length)
+	  if (ka.length !== kb.length)
 	    return false;
 	  //the same set of keys (although not necessarily the same order),
 	  ka.sort();
 	  kb.sort();
 	  //~~~cheap key test
 	  for (i = ka.length - 1; i >= 0; i--) {
-	    if (ka[i] != kb[i])
+	    if (ka[i] !== kb[i])
 	      return false;
 	  }
 	  //equivalent values for every corresponding key, and
 	  //~~~possibly expensive deep test
 	  for (i = ka.length - 1; i >= 0; i--) {
 	    key = ka[i];
-	    if (!_deepEqual(a[key], b[key])) return false;
+	    if (!_deepEqual(a[key], b[key], strict, actualVisitedObjects))
+	      return false;
 	  }
 	  return true;
 	}
@@ -76744,10 +77265,18 @@
 	// assert.notDeepEqual(actual, expected, message_opt);
 	
 	assert.notDeepEqual = function notDeepEqual(actual, expected, message) {
-	  if (_deepEqual(actual, expected)) {
+	  if (_deepEqual(actual, expected, false)) {
 	    fail(actual, expected, message, 'notDeepEqual', assert.notDeepEqual);
 	  }
 	};
+	
+	assert.notDeepStrictEqual = notDeepStrictEqual;
+	function notDeepStrictEqual(actual, expected, message) {
+	  if (_deepEqual(actual, expected, true)) {
+	    fail(actual, expected, message, 'notDeepStrictEqual', notDeepStrictEqual);
+	  }
+	}
+	
 	
 	// 9. The strict equality assertion tests strict equality, as determined by ===.
 	// assert.strictEqual(actual, expected, message_opt);
@@ -76774,28 +77303,46 @@
 	
 	  if (Object.prototype.toString.call(expected) == '[object RegExp]') {
 	    return expected.test(actual);
-	  } else if (actual instanceof expected) {
-	    return true;
-	  } else if (expected.call({}, actual) === true) {
-	    return true;
 	  }
 	
-	  return false;
+	  try {
+	    if (actual instanceof expected) {
+	      return true;
+	    }
+	  } catch (e) {
+	    // Ignore.  The instanceof check doesn't work for arrow functions.
+	  }
+	
+	  if (Error.isPrototypeOf(expected)) {
+	    return false;
+	  }
+	
+	  return expected.call({}, actual) === true;
+	}
+	
+	function _tryBlock(block) {
+	  var error;
+	  try {
+	    block();
+	  } catch (e) {
+	    error = e;
+	  }
+	  return error;
 	}
 	
 	function _throws(shouldThrow, block, expected, message) {
 	  var actual;
 	
-	  if (util.isString(expected)) {
+	  if (typeof block !== 'function') {
+	    throw new TypeError('"block" argument must be a function');
+	  }
+	
+	  if (typeof expected === 'string') {
 	    message = expected;
 	    expected = null;
 	  }
 	
-	  try {
-	    block();
-	  } catch (e) {
-	    actual = e;
-	  }
+	  actual = _tryBlock(block);
 	
 	  message = (expected && expected.name ? ' (' + expected.name + ').' : '.') +
 	            (message ? ' ' + message : '.');
@@ -76804,7 +77351,14 @@
 	    fail(actual, expected, 'Missing expected exception' + message);
 	  }
 	
-	  if (!shouldThrow && expectedException(actual, expected)) {
+	  var userProvidedMessage = typeof message === 'string';
+	  var isUnwantedException = !shouldThrow && util.isError(actual);
+	  var isUnexpectedException = !shouldThrow && actual && !expected;
+	
+	  if ((isUnwantedException &&
+	      userProvidedMessage &&
+	      expectedException(actual, expected)) ||
+	      isUnexpectedException) {
 	    fail(actual, expected, 'Got unwanted exception' + message);
 	  }
 	
@@ -76818,15 +77372,15 @@
 	// assert.throws(block, Error_opt, message_opt);
 	
 	assert.throws = function(block, /*optional*/error, /*optional*/message) {
-	  _throws.apply(this, [true].concat(pSlice.call(arguments)));
+	  _throws(true, block, error, message);
 	};
 	
 	// EXTENSION! This is annoying to write outside this module.
-	assert.doesNotThrow = function(block, /*optional*/message) {
-	  _throws.apply(this, [false].concat(pSlice.call(arguments)));
+	assert.doesNotThrow = function(block, /*optional*/error, /*optional*/message) {
+	  _throws(false, block, error, message);
 	};
 	
-	assert.ifError = function(err) { if (err) {throw err;}};
+	assert.ifError = function(err) { if (err) throw err; };
 	
 	var objectKeys = Object.keys || function (obj) {
 	  var keys = [];
@@ -76835,10 +77389,11 @@
 	  }
 	  return keys;
 	};
-
+	
+	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 126 */
+/* 125 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(Buffer) {/*!
@@ -76847,12 +77402,12 @@
 	 * MIT Licensed
 	 */
 	
-	var util = __webpack_require__(75)
-	  , Validation = __webpack_require__(127).Validation
-	  , ErrorCodes = __webpack_require__(101)
-	  , BufferPool = __webpack_require__(129)
-	  , bufferUtil = __webpack_require__(102).BufferUtil
-	  , PerMessageDeflate = __webpack_require__(104);
+	var util = __webpack_require__(74)
+	  , Validation = __webpack_require__(126).Validation
+	  , ErrorCodes = __webpack_require__(100)
+	  , BufferPool = __webpack_require__(128)
+	  , bufferUtil = __webpack_require__(101).BufferUtil
+	  , PerMessageDeflate = __webpack_require__(103);
 	
 	/**
 	 * HyBi Receiver implementation
@@ -77638,7 +78193,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(16).Buffer))
 
 /***/ },
-/* 127 */
+/* 126 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -77652,12 +78207,12 @@
 	try {
 	  module.exports = __webpack_require__(!(function webpackMissingModule() { var e = new Error("Cannot find module \"utf-8-validate\""); e.code = 'MODULE_NOT_FOUND'; throw e; }()));
 	} catch (e) {
-	  module.exports = __webpack_require__(128);
+	  module.exports = __webpack_require__(127);
 	}
 
 
 /***/ },
-/* 128 */
+/* 127 */
 /***/ function(module, exports) {
 
 	/*!
@@ -77674,7 +78229,7 @@
 
 
 /***/ },
-/* 129 */
+/* 128 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(Buffer) {/*!
@@ -77683,7 +78238,7 @@
 	 * MIT Licensed
 	 */
 	
-	var util = __webpack_require__(75);
+	var util = __webpack_require__(74);
 	
 	function BufferPool(initialSize, growStrategy, shrinkStrategy) {
 	  if (this instanceof BufferPool === false) {
@@ -77744,7 +78299,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(16).Buffer))
 
 /***/ },
-/* 130 */
+/* 129 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(Buffer) {/*!
@@ -77754,7 +78309,7 @@
 	 */
 	
 	var events = __webpack_require__(27)
-	  , util = __webpack_require__(75)
+	  , util = __webpack_require__(74)
 	  , EventEmitter = events.EventEmitter;
 	
 	/**
@@ -77875,7 +78430,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(16).Buffer))
 
 /***/ },
-/* 131 */
+/* 130 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(Buffer) {/*!
@@ -77884,7 +78439,7 @@
 	 * MIT Licensed
 	 */
 	
-	var util = __webpack_require__(75);
+	var util = __webpack_require__(74);
 	
 	/**
 	 * State constants
@@ -78076,11 +78631,11 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(16).Buffer))
 
 /***/ },
-/* 132 */
+/* 131 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
-	var util = __webpack_require__(75);
+	var util = __webpack_require__(74);
 	
 	/**
 	 * Module exports.
@@ -78152,7 +78707,7 @@
 
 
 /***/ },
-/* 133 */
+/* 132 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(Buffer) {/*!
@@ -78161,16 +78716,16 @@
 	 * MIT Licensed
 	 */
 	
-	var util = __webpack_require__(75)
+	var util = __webpack_require__(74)
 	  , events = __webpack_require__(27)
-	  , http = __webpack_require__(77)
-	  , crypto = __webpack_require__(82)
-	  , Options = __webpack_require__(98)
-	  , WebSocket = __webpack_require__(68)
-	  , Extensions = __webpack_require__(132)
-	  , PerMessageDeflate = __webpack_require__(104)
-	  , tls = __webpack_require__(99)
-	  , url = __webpack_require__(69);
+	  , http = __webpack_require__(76)
+	  , crypto = __webpack_require__(81)
+	  , Options = __webpack_require__(97)
+	  , WebSocket = __webpack_require__(67)
+	  , Extensions = __webpack_require__(131)
+	  , PerMessageDeflate = __webpack_require__(103)
+	  , tls = __webpack_require__(98)
+	  , url = __webpack_require__(68);
 	
 	/**
 	 * WebSocket Server implementation
@@ -78713,7 +79268,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(16).Buffer))
 
 /***/ },
-/* 134 */
+/* 133 */
 /***/ function(module, exports) {
 
 	
@@ -78727,13 +79282,13 @@
 
 
 /***/ },
-/* 135 */
+/* 134 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
-	var PipeBag = __webpack_require__(46);
-	var defaultSocketConfig = __webpack_require__(134);
-	var Config = __webpack_require__(60);
+	var PipeBag = __webpack_require__(45);
+	var defaultSocketConfig = __webpack_require__(133);
+	var Config = __webpack_require__(59);
 	
 	function Socket(config) {
 		this._pipes = new PipeBag();
@@ -78754,7 +79309,7 @@
 
 
 /***/ },
-/* 136 */
+/* 135 */
 /***/ function(module, exports) {
 
 	
@@ -78782,7 +79337,7 @@
 
 
 /***/ },
-/* 137 */
+/* 136 */
 /***/ function(module, exports) {
 
 	
@@ -78884,7 +79439,7 @@
 
 
 /***/ },
-/* 138 */
+/* 137 */
 /***/ function(module, exports) {
 
 	
@@ -78930,24 +79485,24 @@
 
 
 /***/ },
-/* 139 */
+/* 138 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
-	var ConsoleLogger = __webpack_require__(140);
+	var ConsoleLogger = __webpack_require__(139);
 	
 	module.exports = ConsoleLogger;
 
 
 /***/ },
-/* 140 */
+/* 139 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
 	var Stream = __webpack_require__(26);
-	var inherits = __webpack_require__(44);
-	var Config = __webpack_require__(60);
-	var now = __webpack_require__(48);
+	var inherits = __webpack_require__(28);
+	var Config = __webpack_require__(59);
+	var now = __webpack_require__(47);
 	
 	var defaultConfig = new Config({
 		logTimestamp: true,
@@ -79030,13 +79585,13 @@
 
 
 /***/ },
-/* 141 */
+/* 140 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
 	var DemoGame = __webpack_require__(3);
-	var CubeEntity = __webpack_require__(142);
-	var SphereEntity = __webpack_require__(143);
+	var CubeEntity = __webpack_require__(141);
+	var SphereEntity = __webpack_require__(142);
 	
 	function DemoHostGame1(name) {
 		var game = new DemoGame(true, name || 'Host Game');
@@ -79084,7 +79639,7 @@
 
 
 /***/ },
-/* 142 */
+/* 141 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -79130,7 +79685,7 @@
 
 
 /***/ },
-/* 143 */
+/* 142 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -79172,7 +79727,7 @@
 
 
 /***/ },
-/* 144 */
+/* 143 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -79188,16 +79743,16 @@
 
 
 /***/ },
-/* 145 */
+/* 144 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
 	var Demo = __webpack_require__(2);
 	var DemoGame = __webpack_require__(3);
-	var ConsoleLogger = __webpack_require__(139);
-	var DemoHostGame1 = __webpack_require__(141);
-	var DemoPausingClientGame = __webpack_require__(146);
-	var DemoClientGame = __webpack_require__(144);
+	var ConsoleLogger = __webpack_require__(138);
+	var DemoHostGame1 = __webpack_require__(140);
+	var DemoPausingClientGame = __webpack_require__(145);
+	var DemoClientGame = __webpack_require__(143);
 	
 	function ControlsDemo() {
 		var demo = new Demo();
@@ -79228,11 +79783,11 @@
 
 
 /***/ },
-/* 146 */
+/* 145 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
-	var DemoClientGame = __webpack_require__(144);
+	var DemoClientGame = __webpack_require__(143);
 	
 	function DemoPausingClientGame(name) {
 		var game = new DemoClientGame(name || 'Pausing/FastForwarding Game');
