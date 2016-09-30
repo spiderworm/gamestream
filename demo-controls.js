@@ -44,59 +44,12 @@
 /* 0 */
 /***/ function(module, exports, __webpack_require__) {
 
-	module.exports = __webpack_require__(1);
+	module.exports = __webpack_require__(143);
 
 
 /***/ },
-/* 1 */
-/***/ function(module, exports, __webpack_require__) {
-
-	
-	var ControlsDemo = __webpack_require__(2);
-	window.demo = new ControlsDemo();
-
-
-/***/ },
-/* 2 */
-/***/ function(module, exports, __webpack_require__) {
-
-	
-	var Demo = __webpack_require__(3);
-	var DemoGame = __webpack_require__(4);
-	var ConsoleLogger = __webpack_require__(137);
-	var DemoHostGame1 = __webpack_require__(139);
-	var DemoPausingClientGame = __webpack_require__(142);
-	var DemoClientGame = __webpack_require__(143);
-	
-	function ControlsDemo() {
-		var demo = new Demo();
-	
-		var game1 = new DemoHostGame1('Host Game');
-		demo.games.push(game1);
-	
-		var game2 = new DemoPausingClientGame('Game 2');
-		demo.games.push(game2);
-		game1.stream.pipe(game2.stream);
-	
-		var game3 = new DemoClientGame('Game 3');
-		game3.description = 'This game has its state piped from the upstream ' + game2.name + '. Notice that when the upstream game pauses, this game stops receiving state updates. However, because it\'s running its own physics, things still appear to move. Once the upstream game unpauses, this game catches up to its upstream.';
-		demo.games.push(game3);
-		game2.stream.pipe(game3.stream);
-	
-		var game4 = new DemoClientGame('Game 4');
-		var lag = 1000;
-		game4.stream.setTime((+new Date()) - lag);
-		game4.description = 'This game has its state piped from ' + game3.name + ', but lags ' + (lag / 1000) + ' second(s) behind.';
-		demo.games.push(game4);
-		game3.stream.pipe(game4.stream);
-	
-		return demo;
-	}
-	
-	module.exports = ControlsDemo;
-
-
-/***/ },
+/* 1 */,
+/* 2 */,
 /* 3 */
 /***/ function(module, exports, __webpack_require__) {
 
@@ -79168,7 +79121,72 @@
 /***/ function(module, exports, __webpack_require__) {
 
 	
-	var DemoClientGame = __webpack_require__(143);
+	var DemoGame = __webpack_require__(4);
+	
+	function DemoClientGame(name) {
+		var game = new DemoGame(false, name || 'Client Game');
+		game.description = 'This game receives state from an upstream game.';
+		return game;
+	}
+	
+	module.exports = DemoClientGame;
+
+
+/***/ },
+/* 143 */
+/***/ function(module, exports, __webpack_require__) {
+
+	
+	var ControlsDemo = __webpack_require__(144);
+	window.demo = new ControlsDemo();
+
+
+/***/ },
+/* 144 */
+/***/ function(module, exports, __webpack_require__) {
+
+	
+	var Demo = __webpack_require__(3);
+	var DemoGame = __webpack_require__(4);
+	var ConsoleLogger = __webpack_require__(137);
+	var DemoHostGame1 = __webpack_require__(139);
+	var DemoPausingClientGame = __webpack_require__(145);
+	var DemoClientGame = __webpack_require__(142);
+	
+	function ControlsDemo() {
+		var demo = new Demo();
+	
+		var game1 = new DemoHostGame1('Host Game');
+		demo.games.push(game1);
+	
+		var game2 = new DemoPausingClientGame('Game 2');
+		demo.games.push(game2);
+		game1.stream.pipe(game2.stream);
+	
+		var game3 = new DemoClientGame('Game 3');
+		game3.description = 'This game has its state piped from the upstream ' + game2.name + '. Notice that when the upstream game pauses, this game stops receiving state updates. However, because it\'s running its own physics, things still appear to move. Once the upstream game unpauses, this game catches up to its upstream.';
+		demo.games.push(game3);
+		game2.stream.pipe(game3.stream);
+	
+		var game4 = new DemoClientGame('Game 4');
+		var lag = 1000;
+		game4.stream.setTime((+new Date()) - lag);
+		game4.description = 'This game has its state piped from ' + game3.name + ', but lags ' + (lag / 1000) + ' second(s) behind.';
+		demo.games.push(game4);
+		game3.stream.pipe(game4.stream);
+	
+		return demo;
+	}
+	
+	module.exports = ControlsDemo;
+
+
+/***/ },
+/* 145 */
+/***/ function(module, exports, __webpack_require__) {
+
+	
+	var DemoClientGame = __webpack_require__(142);
 	
 	function DemoPausingClientGame(name) {
 		var game = new DemoClientGame(name || 'Pausing/FastForwarding Game');
@@ -79195,22 +79213,6 @@
 	}
 	
 	module.exports = DemoPausingClientGame;
-
-
-/***/ },
-/* 143 */
-/***/ function(module, exports, __webpack_require__) {
-
-	
-	var DemoGame = __webpack_require__(4);
-	
-	function DemoClientGame(name) {
-		var game = new DemoGame(false, name || 'Client Game');
-		game.description = 'This game receives state from an upstream game.';
-		return game;
-	}
-	
-	module.exports = DemoClientGame;
 
 
 /***/ }

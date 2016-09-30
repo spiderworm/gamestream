@@ -44,12 +44,74 @@
 /* 0 */
 /***/ function(module, exports, __webpack_require__) {
 
-	module.exports = __webpack_require__(147);
+	module.exports = __webpack_require__(1);
 
 
 /***/ },
-/* 1 */,
-/* 2 */,
+/* 1 */
+/***/ function(module, exports, __webpack_require__) {
+
+	
+	var ClientServerDemo = __webpack_require__(2);
+	window.demo = new ClientServerDemo();
+
+
+/***/ },
+/* 2 */
+/***/ function(module, exports, __webpack_require__) {
+
+	
+	var Demo = __webpack_require__(3);
+	var DemoGame = __webpack_require__(4);
+	var ConsoleLogger = __webpack_require__(137);
+	var DemoHostGame1 = __webpack_require__(139);
+	var DemoClientGame = __webpack_require__(142);
+	
+	function ClientServerDemo() {
+		var demo = new Demo();
+	
+		var host = new DemoHostGame1('Host Game');
+		host.description = "This represents a host game running on a server. Clients will connect and disconnect from it on their own, and state is piped from this host to each individual client. We expect that clients that connect will immediately display the same state as the host game.";
+		demo.games.push(host);
+	
+		var client1 = new DemoClientGame('Client 1');
+		client1.description = "This represents a client that is persistantly connected to the host game."
+		demo.games.push(client1);
+		host.stream.pipe(client1.stream);
+	
+		var clientCount = 1;
+	
+		var clientConnectInterval = 5000;
+		var clientDuration = clientConnectInterval * 1.5;
+	
+		function connectClient() {
+			clientCount++;
+			var client = new DemoClientGame('Client ' + clientCount);
+			client.description = "This client just connected to the host game, but will disconnect soon. It should immediately display the full host game state and stay in sync while connected. It will disconnect after " + (clientDuration / 1000) + " seconds.";
+			demo.games.push(client);
+			host.stream.pipe(client.stream);
+	
+			setTimeout(function() { disconnectClient(client); }, clientDuration);
+			setTimeout(connectClient, clientConnectInterval);
+		}
+	
+		function disconnectClient(client) {
+			var i = demo.games.indexOf(client);
+			if (i !== -1) {
+				demo.games.splice(i,1);
+			}
+			host.stream.unpipe(client.stream);
+		}
+	
+		connectClient();
+	
+		return demo;
+	}
+	
+	module.exports = ClientServerDemo;
+
+
+/***/ },
 /* 3 */
 /***/ function(module, exports, __webpack_require__) {
 
@@ -78975,7 +79037,60 @@
 
 
 /***/ },
-/* 139 */,
+/* 139 */
+/***/ function(module, exports, __webpack_require__) {
+
+	
+	var DemoGame = __webpack_require__(4);
+	var CubeEntity = __webpack_require__(140);
+	var SphereEntity = __webpack_require__(141);
+	
+	function DemoHostGame1(name) {
+		var game = new DemoGame(true, name || 'Host Game');
+		game.description = 'This is a game that generates the actual gameplay. This might represent for example a game running on a server. It has the controlling game logic, and its state is usually streamed to downstream games.';
+	
+		function addCube() {
+			addEntity(
+				getNextEntityId('cube'),
+				new CubeEntity()
+			);
+			setTimeout(addSphere, 500);
+		}
+	
+		function addSphere() {
+			addEntity(
+				getNextEntityId('sphere'),
+				new SphereEntity()
+			);
+			setTimeout(addCube, 500);
+		}
+	
+		function addEntity(name, entity) {
+			game.entities[name] = entity;
+			setTimeout(function() {removeEntity(entity);}, 4100);
+		}
+	
+		function removeEntity(cube) {
+			cube.life.alive = false;
+		}
+	
+		function getNextEntityId(base) {
+			var count = getNextEntityId.count || 0;
+			count++;
+			getNextEntityId.count = count;
+			return base + count;
+		}
+	
+		setTimeout(addCube, 500);
+	
+		return game;
+	}
+	
+	module.exports = DemoHostGame1;
+	
+
+
+/***/ },
 /* 140 */
 /***/ function(module, exports, __webpack_require__) {
 
@@ -79022,80 +79137,63 @@
 
 
 /***/ },
-/* 141 */,
-/* 142 */,
-/* 143 */,
-/* 144 */,
-/* 145 */,
-/* 146 */,
-/* 147 */
+/* 141 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
-	var DemoOne = __webpack_require__(148);
-	window.demo = new DemoOne();
+	var Entity = __webpack_require__(12);
+	
+	function SphereEntity() {
+		return new Entity({
+			physics: {
+				position: {
+					x: 0,
+					y: 0,
+					z: 4
+				},
+				rotation: {
+					w: 1,
+					x: 0,
+					y: 0,
+					z: 0
+				}
+			},
+			view: {
+				color: 0x00ffcc
+			},
+			shapes: [
+				{
+					type: 'sphere',
+					size: 1,
+					position: {
+						x: 0,
+						y: 0,
+						z: 0
+					}
+				}
+			]
+		});
+	}
+	
+	module.exports = SphereEntity;
 
 
 /***/ },
-/* 148 */
+/* 142 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
-	var Demo = __webpack_require__(3);
 	var DemoGame = __webpack_require__(4);
-	var CubeEntity = __webpack_require__(140);
-	var GameStream = __webpack_require__(22);
-	var ConsoleLogger = __webpack_require__(137);
 	
-	function DemoOne() {
-		var demo = new Demo();
-	
-		var game1 = new DemoGame(true);
-		demo.games.push(game1);
-	
-		var game2 = new DemoGame(false);
-		demo.games.push(game2);
-		game2.stream.setTime((+new Date()) - 500);
-		game1.stream.pipe(game2.stream);
-	
-		var game3 = new DemoGame(false);
-		demo.games.push(game3);
-		game2.stream.pipe(game3.stream);
-	
-		var game4 = new DemoGame(false);
-		demo.games.push(game4);
-		game3.stream.pipe(game4.stream);
-		game4.stream.setTime((+new Date()) - 5000);
-	
-		this._runGame(game1);
-	
-		return demo;
+	function DemoClientGame(name) {
+		var game = new DemoGame(false, name || 'Client Game');
+		game.description = 'This game receives state from an upstream game.';
+		return game;
 	}
 	
-	DemoOne.prototype._runGame = function(game) {
-	
-		function addCube() {
-			addCube.count = addCube.count || 0;
-			addCube.count++;
-			var cubeName = 'cube' + addCube.count;
-			var cube = new CubeEntity();
-			game.entities[cubeName] = cube;
-	
-			setTimeout(addCube, 200);
-			setTimeout(function() {removeCube(cube);}, 4100);
-		}
-	
-		function removeCube(cube) {
-			cube.life.alive = false;
-		}
-	
-		addCube();
-	
-	};
-	
-	module.exports = DemoOne;
+	module.exports = DemoClientGame;
 
 
 /***/ }
 /******/ ]);
-//# sourceMappingURL=demo-one.js.map
+//# sourceMappingURL=demo-client-server.js.map
