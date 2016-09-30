@@ -1,5 +1,4 @@
 
-var DemoThrees = require('../shared/view/DemoThrees.js');
 var PhysicsSystem = require('./physics/PhysicsSystem.js');
 var ViewSystem = require('./view/ViewSystem.js');
 var FloorEntity = require('./entities/FloorEntity.js');
@@ -24,8 +23,6 @@ function DemoGame(isHost, name) {
 	this.entities = {
 		floor: new FloorEntity()
 	};
-
-	this.threes = new DemoThrees();
 
 	this.stream = new GameStream();
 
