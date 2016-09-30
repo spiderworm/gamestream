@@ -1,13 +1,13 @@
 
 var webpackDemosConfig = {
-	context: "./test/demos/",
 	entry: {
-		"index": "./index.js",
-		"one": "./one.js",
-		"controls": "./controls.js",
-		"client-server": "./client-server.js"
+		"index": "./test/demos/index.js",
+		"one": "./test/demos/one.js",
+		"controls": "./test/demos/controls.js",
+		"client-server": "./test/demos/client-server.js"
 	},
 	output: {
+		path: "./built/",
 		filename: "./test/demos/[name].js"
 	},
 	devtool: 'source-map',

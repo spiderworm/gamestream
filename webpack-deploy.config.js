@@ -8,39 +8,27 @@ demosConfig = clone(
 	[
 		{
 			output: {
-				publicPath: "/gamestream/",
-				filename: "./built/test/demos/[name].js"
+				publicPath: "/gamestream/"
 			}
 		}
 	]
 );
 
-var webFilesConfig = {
-	entry: "./index.js",
-	output: {
-		filename: "./built/index.js"
-	},
-	plugins: [
-		new CopyWebpackPlugin(
-			[
-				{ from: "./**/*.html", to: "./built/" },
-				{ from: "./**/*.css", to: "./built/" }
-			],
-			{
-				ignore: [
-					'./built/**/*',
-					'./node_modules/**/*'
-				]
-			}
-		)
-	],
-	devtool: 'source-map',
-	node: {
-		fs: 'empty',
-		tls: 'empty'
-	}
-};
+demosConfig.plugins = demosConfig.plugins || [];
 
-var configs = [demosConfig, webFilesConfig];
+demosConfig.plugins.push(
+	new CopyWebpackPlugin(
+		[
+			{ from: "./**/*.html", to: "./" },
+			{ from: "./**/*.css", to: "./" }
+		],
+		{
+			ignore: [
+				'./built/**/*',
+				'./node_modules/**/*'
+			]
+		}
+	)
+);
 
-module.exports = configs;
+module.exports = demosConfig;

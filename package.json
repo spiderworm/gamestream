@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "deploy": "webpack --config webpack-deploy.config.js && gh-pages -d built"
+    "deploy": "webpack --config webpack-deploy.config.js && gh-pages -d built",
+    "watch": "webpack-dev-server --config webpack-dev-server.config.js"
   },
   "repository": {
     "type": "git",

@@ -12,8 +12,11 @@ function ClientServerDemo() {
 	host.description = "This represents a host game running on a server. Clients will connect and disconnect from it on their own, and state is piped from this host to each individual client. We expect that clients that connect will immediately display the same state as the host game.";
 	demo.games.push(host);
 
+	var clientLag = 100;
+
 	var client1 = new DemoClientGame('Client 1');
-	client1.description = "This represents a client that is persistantly connected to the host game."
+	client1.description = "This represents a client that is persistantly connected to the host game. It runs " + clientLag + " ms behind the host game.";
+	client1.stream.time = +new Date() - clientLag;
 	demo.games.push(client1);
 	host.stream.pipe(client1.stream);
 
@@ -25,7 +28,8 @@ function ClientServerDemo() {
 	function connectClient() {
 		clientCount++;
 		var client = new DemoClientGame('Client ' + clientCount);
-		client.description = "This client just connected to the host game, but will disconnect soon. It should immediately display the full host game state and stay in sync while connected. It will disconnect after " + (clientDuration / 1000) + " seconds.";
+		client.stream.time = +new Date() - clientLag;
+		client.description = "This client just connected to the host game, but will disconnect soon. It should immediately display the full host game state and stay in sync (" + clientLag + " ms behind) while connected. It will disconnect after " + (clientDuration / 1000) + " seconds.";
 		demo.games.push(client);
 		host.stream.pipe(client.stream);
 
