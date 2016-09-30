@@ -9,6 +9,9 @@ var config = {
 		],
 		"demo-one": [
 			"./test/demos/one.js"
+		],
+		"demo-controls": [
+			"./test/demos/controls.js"
 		]
 	},
 	devtool: 'source-map',

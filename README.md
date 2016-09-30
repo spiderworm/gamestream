@@ -9,7 +9,7 @@ The goal of this project is to create a library to make it easy to stream state 
 
 ### Should I Use This?
 
-This library is in it's very infancy! Really, I'm less than 50 commits into this thing. It does seem to work, however, and it's making my game dev projects easier, and I think it might help you too!
+This library is in it's very infancy! Really, I'm less than 100 commits into this thing. It does seem to work, however, and it's making my game dev projects easier, and I think it might help you too!
 
 ### How Can I Help?
 

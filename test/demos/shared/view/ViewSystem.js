@@ -56,8 +56,8 @@ ViewSystem.prototype._updateEntityShape = function(entity) {
 					case 'sphere':
 						geometry = new THREE.SphereGeometry(
 							shape.size / 2,
-							32,
-							32
+							10,
+							10
 						);
 					break;
 					case 'cube':

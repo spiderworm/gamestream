@@ -2,14 +2,17 @@
 var DemoThrees = require('../shared/view/DemoThrees.js');
 var PhysicsSystem = require('./physics/PhysicsSystem.js');
 var ViewSystem = require('./view/ViewSystem.js');
-var now = require('../../../misc/now.js');
 var FloorEntity = require('./entities/FloorEntity.js');
 var GameStream = require('../GameStream.js');
 var Entity = require('./ecs/Entity.js');
 var GarbageCollectorSystem = require('./life/GarbageCollectorSystem.js');
+var DemoGameStatsView = require('./view/DemoGameStatsView.js');
 
-function DemoGame(isHost) {
+function DemoGame(isHost, name) {
 	this.isHost = !!isHost;
+
+	this.name = name || '';
+	this.description = '';
 
 	this.systems = {
 		physics: new PhysicsSystem(),
@@ -26,25 +29,30 @@ function DemoGame(isHost) {
 
 	this.stream = new GameStream();
 
+	this.statsView = new DemoGameStatsView(this);
+
 	if (!this.isHost) {
 		this.stream.on('data', this.applyState.bind(this));
 	}
 }
 
 DemoGame.prototype.tick = function() {
-	var time = now();
+	var time = this.stream.time;
 	if (!this._lastTick) {
 		this._lastTick = time;
 	}
 	var delta = time - this._lastTick;
 	this._lastTick = time;
-	this.eachSystem(function(system) {
-		system.tick(delta, this.entities);
-	}.bind(this));
-	if (this.isHost) {
-		this.streamState();
+	if (delta !== 0) {
+		this.eachSystem(function(system) {
+			system.tick(delta, this.entities);
+		}.bind(this));
+		if (this.isHost) {
+			this.streamState();
+		}
+		this.garbageCollector.tick(delta, this.entities);
 	}
-	this.garbageCollector.tick(delta, this.entities);
+	this.statsView.update();
 };
 
 DemoGame.prototype.eachSystem = function(callback) {
@@ -83,25 +91,25 @@ DemoGame.prototype.streamState = function() {
 };
 
 DemoGame.prototype.applyState = function(state) {
-	function applyEntitiesState(state, entities) {
-		Object.keys(state).forEach(function(key) {
-			if (state[key] === undefined) {
-				if (entities[key]) {
-					entities[key].life.alive = false;
-				}
-			} else {
-				if (entities[key]) {
-					Entity.apply(entities[key], state[key]);
+	function applyEntitiesState(update, entities) {
+		if (update) {
+			Object.keys(update).forEach(function(key) {
+				if (update[key] === undefined) {
+					if (entities[key]) {
+						entities[key].life.alive = false;
+					}
 				} else {
-					entities[key] = new Entity(state[key]);
+					if (entities[key]) {
+						Entity.apply(entities[key], update[key]);
+					} else {
+						entities[key] = new Entity(update[key]);
+					}
 				}
-			}
-		});
+			});
+		}
 	}
 
 	applyEntitiesState(state.update, this.entities);
-	this._lastTick = state.time;
-	this.tick();
 };
 
 module.exports = DemoGame;

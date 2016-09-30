@@ -10,9 +10,9 @@ function DemoSceneThrees() {
 		1,
 		10000
 	);
-	this.camera.position.set(3,3,1);
+	this.camera.position.set(0,8,3);
 	this.camera.up.set(0,0,1);
-	this.camera.lookAt(new THREE.Vector3(0,0,0));
+	this.camera.lookAt(new THREE.Vector3(0,0,3));
 	this.scene.add(this.camera);
 }
 

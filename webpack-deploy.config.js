@@ -11,14 +11,13 @@ var config = {
 	plugins: [
 		new CopyWebpackPlugin(
 			[
-				{ from: "./*.html", to: "./built/" },
-				{ from: "./**/*.html", to: "./built/" }
+				{ from: "./**/*.html", to: "./built/" },
+				{ from: "./**/*.css", to: "./built/" }
 			],
 			{
 				ignore: [
 					'./built/**/*',
-					'./node_modules/*.html',
-					'./node_modules/**/*.html'
+					'./node_modules/**/*'
 				]
 			}
 		)
