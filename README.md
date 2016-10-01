@@ -14,7 +14,11 @@ This library is in it's very infancy! Really, I'm less than 100 commits into thi
 
 ### How Can I Help?
 
-Please favorite and watch this project so that you can be notified as I add features and fix serious issues. Please provide feedback, both positive and negative, in the GitHub issues tab so I can know where to improve it and where it already shines!
+Please provide me with feedback on the following by either opening an issue, or submitting a pull request:
+- documentation
+- interface, usability
+
+If you like this project, please watch it or star it in GitHub! Thanks!
 
 ### Installation
 
