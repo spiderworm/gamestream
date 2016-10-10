@@ -2,8 +2,25 @@
 var CANNON = require('cannon');
 
 function PhysicsSystem() {
-	this._cannon = new CANNON.World();
-	this._cannon.gravity.set(0, 0, -5);
+	var world = new CANNON.World();
+
+	world.gravity.set(0, 0, -9.8);
+
+	world.defaultMaterial = new CANNON.Material("defaultMaterial");
+	world.defaultContactMaterial = new CANNON.ContactMaterial(
+		world.defaultMaterial,
+		world.defaultMaterial,
+		{
+			friction: 0.4,
+			restitution: 0.3,
+			contactEquationStiffness: 1e8,
+			contactEquationRelaxation: 3,
+			frictionEquationStiffness: 1e8,
+			frictionEquationRegularizationTime: 3,
+		}
+	);
+
+	this._cannon = world;
 }
 
 PhysicsSystem.prototype.tick = function(ms, entities) {
@@ -30,6 +47,23 @@ PhysicsSystem.prototype._updateEntityPhysics = function(entity) {
 	if (entity.physics) {
 		if (entity.life.alive && entity.physics.alive) {
 			if (!entity.physics._cannon) {
+
+				var material = this._cannon.defaultContactMaterial;
+				if (
+					(entity.physics.friction || entity.physics.friction === 0) &&
+					entity.physics.friction !== this._cannon.defaultContactMaterial.friction
+				) {
+					material = new CANNON.Material("entityMaterial");
+
+					var contactMaterial = new CANNON.ContactMaterial(
+						material, this._cannon.defaultContactMaterial,
+						{
+							friction: entity.physics.friction
+						}
+					);
+					this._cannon.addContactMaterial(contactMaterial);
+				}
+
 				var type = entity.physics.static === true ? CANNON.Body.STATIC : CANNON.Body.DYNAMIC;
 				var mass = entity.physics.mass || 1;
 				if (type === CANNON.Body.STATIC) {
@@ -37,13 +71,15 @@ PhysicsSystem.prototype._updateEntityPhysics = function(entity) {
 				}
 				entity.physics._cannon = new CANNON.Body({
 					mass: mass,
-					type: type
+					type: type,
+					material: material
 				});
 				entity.physics._cannon.position.set(
 					entity.physics.position.x,
 					entity.physics.position.y,
 					entity.physics.position.z
 				);
+
 				this._cannon.addBody(entity.physics._cannon);
 			}
 		} else {

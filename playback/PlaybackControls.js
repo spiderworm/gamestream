@@ -5,14 +5,13 @@ var playbackUtil = require('./playbackUtil.js');
 var OutputState = require('../states/OutputState.js');
 var RewriteOutputState = require('../states/RewriteOutputState.js');
 var CatchUpOutputState = require('../states/CatchUpOutputState.js');
-var PlaybackPointer = require('./PlaybackPointer.js');
 var PipeBag = require('../stream/PipeBag.js');
 var CustomWritable = require('../stream/CustomWritable.js');
 
-function PlaybackControls(statesTimeStore) {
+function PlaybackControls(playbackPointer) {
 	Stream.call(this, { objectMode: true });
 
-	this._pointer = new PlaybackPointer(statesTimeStore);
+	this._pointer = playbackPointer;
 
 	this._pipes = new PipeBag(this);
 	PipeBag.exposeInterface(this, this._pipes);

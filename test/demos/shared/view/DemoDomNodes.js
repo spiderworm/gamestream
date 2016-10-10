@@ -14,6 +14,7 @@ function DemoOverlay() {
 	node.style.height = '100%';
 	node.style.position = 'absolute';
 	node.style.zIndex = 2;
+	node.style.pointerEvents = 'none';
 	node.clear = function() {
 		node.innerHTML = '';
 	};

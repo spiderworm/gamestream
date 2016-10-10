@@ -54,7 +54,7 @@ ObjectFactory.prototype.clone = function(a, config) {
 	if (!config.copyUndefined) {
 		this.purgeUndefined(b, config);
 	}
-	return a;
+	return b;
 };
 
 ObjectFactory.prototype.assign = function(a, b, config) {
@@ -74,7 +74,9 @@ ObjectFactory.prototype.assignDeep = function(a, b, config) {
 			if (!isObject(a[i])) {
 				a[i] = {};
 			}
-			this.assignDeep(a[i], b[i], config);
+			if (isObject(a[i])) {
+				this.assignDeep(a[i], b[i], config);
+			}
 		} else {
 			if (b[i] === undefined && config.copyUndefined === false) {
 				delete a[i];
@@ -133,11 +135,11 @@ ObjectFactoryFactory.prototype.createFactory = function(config) {
 	return new ObjectFactory(config);
 };
 
-ObjectFactoryFactory.prototype.clone = new ObjectFactory({clone: true, deep: true, narrow: false});
-
-ObjectFactoryFactory.prototype.cloneNarrow = new ObjectFactory({clone: true, deep: true, narrow: true});
-
-ObjectFactoryFactory.prototype.assignDeep = new ObjectFactory({clone: false, deep: true, narrow: false});
-
 var objectFactory = new ObjectFactoryFactory();
+
+objectFactory.isObject = isObject;
+objectFactory.clone = new ObjectFactory({clone: true, deep: true, narrow: false});
+objectFactory.cloneNarrow = new ObjectFactory({clone: true, deep: true, narrow: true});
+objectFactory.assignDeep = new ObjectFactory({clone: false, deep: true, narrow: false});
+
 module.exports = objectFactory;

@@ -1,9 +1,7 @@
 
-var DemoGame = require('./DemoGame.js');
 var GameStream = require('../GameStream.js');
 var DemoDomNodes = require('./view/DemoDomNodes.js');
 var DemoThrees = require('./view/DemoThrees.js');
-var ConsoleLogger = require('../ConsoleLogger.js');
 
 function Demo() {
 	this.games = [];
@@ -41,7 +39,7 @@ Demo.prototype.render = function() {
 	this.threes.renderer.setSize(totalWidth, totalHeight);
 	this.games.forEach(function(game, i) {
 		if (game.systems.view) {
-			var gameThrees = game.systems.view.threes;
+			var gameThrees = game.systems.view.getThrees();
 			col++;
 			if (col > colCount) {
 				col = 1;

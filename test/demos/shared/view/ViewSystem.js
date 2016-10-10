@@ -3,7 +3,7 @@ var THREE = require('three');
 var DemoSceneThrees = require('./DemoSceneThrees.js');
 
 function ViewSystem() {
-	this._threes = this.threes = new DemoSceneThrees();
+	this._threes = new DemoSceneThrees();
 }
 
 ViewSystem.prototype.tick = function(ms, entities) {
@@ -14,6 +14,18 @@ ViewSystem.prototype.tick = function(ms, entities) {
 		this._updateEntityPosition(entity);
 		this._updateEntityRotation(entity);
 	}.bind(this));
+};
+
+ViewSystem.prototype.getThrees = function() {
+	return this._threes;
+};
+
+ViewSystem.prototype.getEntityThree = function(entity) {
+	var three = undefined;
+	if (entity && entity.view && entity.view._three) {
+		three = entity.view._three;
+	}
+	return three;
 };
 
 ViewSystem.prototype._updateEntityView = function(entity) {
@@ -47,17 +59,17 @@ ViewSystem.prototype._updateEntityShape = function(entity) {
 
 			if (!shape._three) {
 				var geometry;
-				var material = new THREE.MeshBasicMaterial({
+				var material = new THREE.MeshPhongMaterial({
 					color: entity.view.color,
-					wireframe: true
+					wireframe: false
 				});
 
 				switch (shape.type) {
 					case 'sphere':
 						geometry = new THREE.SphereGeometry(
 							shape.size / 2,
-							10,
-							10
+							15,
+							15
 						);
 					break;
 					case 'cube':
@@ -71,6 +83,8 @@ ViewSystem.prototype._updateEntityShape = function(entity) {
 
 				if (geometry) {
 					shape._three = new THREE.Mesh(geometry, material);
+					shape._three.castShadow = true;
+					shape._three.receiveShadow = true;
 					entity.view._three.add(shape._three);
 				}
 			}

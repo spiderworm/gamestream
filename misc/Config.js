@@ -3,7 +3,7 @@ var objectFactory = require('./objectFactory.js');
 
 var assignNarrow = objectFactory.createFactory({
 	clone: false,
-	deep: true,
+	deep: false,
 	narrow: true
 });
 

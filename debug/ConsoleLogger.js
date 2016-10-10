@@ -12,20 +12,27 @@ var defaultConfig = new Config({
 	logValues: false,
 	logReverseUpdates: false,
 	logFull: false,
-	getDelay: false
+	getDelay: false,
+	duration: Infinity
 });
 
 function ConsoleLogger(config) {
 	Stream.call(this, { objectMode: true });
 	config = new Config(defaultConfig, [config]);
 	Config.apply(config, this);
+	this._logging = true;
 	this.log = this.log.bind(this);
+	if (config.duration !== Infinity) {
+		setTimeout(this.end.bind(this), config.duration);
+	}
 }
 
 inherits(ConsoleLogger, Stream);
 
 ConsoleLogger.prototype.write = function(datas) {
-	this.log(datas);
+	if (this._logging) {
+		this.log(datas);
+	}
 };
 
 ConsoleLogger.prototype.log = function(datas) {
@@ -36,6 +43,12 @@ ConsoleLogger.prototype.log = function(datas) {
 	datas.forEach(function(data) {
 		this._log(time, data);
 	}.bind(this));
+};
+
+ConsoleLogger.prototype.end = function() {
+	if (this._logging) {
+		this._logging = false;
+	}
 };
 
 ConsoleLogger.prototype._log = function(receivedTime, data) {

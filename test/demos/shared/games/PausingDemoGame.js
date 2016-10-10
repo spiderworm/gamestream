@@ -1,8 +1,13 @@
 
-var DemoClientGame = require('./DemoClientGame.js');
+var DemoGame = require('./DemoGame.js');
 
-function DemoPausingClientGame(name) {
-	var game = new DemoClientGame(name || 'Pausing/FastForwarding Game');
+function PausingDemoGame(name) {
+	var game = new DemoGame(name || 'Pausing + Fast-Forwarding Game');
+	DemoPausingGame.apply(game);
+	return game;
+}
+
+PausingDemoGame.apply = function(game) {
 	game.description = 'This game receives its state from an upstream game, but it pauses and fast-forwards from time to time. Keep an eye on the speed.';
 
 	function play() {
@@ -21,8 +26,6 @@ function DemoPausingClientGame(name) {
 	}
 
 	play();
-
-	return game;
 }
 
-module.exports = DemoPausingClientGame;
+module.exports = PausingDemoGame;

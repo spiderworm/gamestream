@@ -1,19 +1,20 @@
 
-var PhysicsSystem = require('./physics/PhysicsSystem.js');
-var ViewSystem = require('./view/ViewSystem.js');
-var FloorEntity = require('./entities/FloorEntity.js');
-var GameStream = require('../GameStream.js');
-var Entity = require('./ecs/Entity.js');
-var GarbageCollectorSystem = require('./life/GarbageCollectorSystem.js');
-var DemoGameStatsView = require('./view/DemoGameStatsView.js');
+var PhysicsSystem = require('../physics/PhysicsSystem.js');
+var ViewSystem = require('../view/ViewSystem.js');
+var FloorEntity = require('../entities/FloorEntity.js');
+var GameStream = require('../../GameStream.js');
+var Entity = require('../ecs/Entity.js');
+var GarbageCollectorSystem = require('../life/GarbageCollectorSystem.js');
+var PlayerControlsSystem = require('../controls/PlayerControlsSystem.js');
+var DemoGameStatsView = require('../view/DemoGameStatsView.js');
+var PlayerEntity = require('../entities/PlayerEntity.js');
 
-function DemoGame(isHost, name) {
-	this.isHost = !!isHost;
-
+function DemoGame(name) {
 	this.name = name || '';
 	this.description = '';
 
 	this.systems = {
+		controls: new PlayerControlsSystem(),
 		physics: new PhysicsSystem(),
 		view: new ViewSystem()
 	};
@@ -24,14 +25,26 @@ function DemoGame(isHost, name) {
 		floor: new FloorEntity()
 	};
 
-	this.stream = new GameStream();
+	this.stream = new GameStream({
+		maxStorage: 200
+	});
 
 	this.statsView = new DemoGameStatsView(this);
-
-	if (!this.isHost) {
-		this.stream.on('data', this.applyState.bind(this));
-	}
 }
+
+DemoGame.prototype.createPlayer = function() {
+	var player = new PlayerEntity();
+	var count = 0;
+	var name;
+
+	do {
+		count++;
+		name = 'player' + count;
+	} while(this.entities[name]);
+
+	this.entities[name] = player;
+	return name;
+};
 
 DemoGame.prototype.tick = function() {
 	var time = this.stream.time;
@@ -44,9 +57,6 @@ DemoGame.prototype.tick = function() {
 		this.eachSystem(function(system) {
 			system.tick(delta, this.entities);
 		}.bind(this));
-		if (this.isHost) {
-			this.streamState();
-		}
 		this.garbageCollector.tick(delta, this.entities);
 	}
 	this.statsView.update();
@@ -58,20 +68,24 @@ DemoGame.prototype.eachSystem = function(callback) {
 	}.bind(this));
 };
 
-DemoGame.prototype.streamState = function() {
-	function getState(obj) {
+DemoGame.prototype.toObject = function() {
+	function toObject(obj) {
 		var o = obj;
 		if (obj instanceof Object) {
 			o = {};
 			Object.keys(obj).forEach(function(key) {
 				if (key.indexOf('_') !== 0) {
-					o[key] = getState(obj[key]);
+					o[key] = toObject(obj[key]);
 				}
 			});
 		}
 		return o;
 	}
+	var obj = toObject(this.entities);
+	return obj;
+};
 
+DemoGame.prototype.streamState = function() {
 	function clearDead(update, garbageCollector) {
 		var deadKeys = garbageCollector.flush();
 
@@ -82,9 +96,14 @@ DemoGame.prototype.streamState = function() {
 		return update;
 	}
 
-	var update = getState(this.entities);
+	var update = this.toObject();
 	update = clearDead(update, this.garbageCollector);
 	this.stream.updateNow(update);
+};
+
+DemoGame.prototype.streamPhysicsState = function() {
+	var update = this.toObject();
+	this.physicsStream.updateNow(update.player1.physics);
 };
 
 DemoGame.prototype.applyState = function(state) {

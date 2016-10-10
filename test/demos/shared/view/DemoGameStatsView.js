@@ -28,6 +28,7 @@ function RootNode() {
 	this.node.style.border = '1px solid rgba(0,0,0,.5)';
 	this.node.style.padding = '5px';
 	this.node.style.position = 'absolute';
+	this.node.style.pointerEvents = 'none';
 	this.node.display = this.display.bind(this);
 	return this.node;
 }
@@ -37,11 +38,13 @@ RootNode.prototype.display = function(x, y, width, height) {
 	this.node.style.top = y + 'px';
 	this.node.style.width = width + 'px';
 	this.node.style.height = height + 'px';
+	this.node.style.pointerEvents = 'none';
 };
 
 function HeaderNode(game) {
 	this.game = game;
 	this.node = document.createElement('h1');
+	this.node.style.pointerEvents = 'none';
 	this.node.update = this.update.bind(this);
 	return this.node;
 }
@@ -53,6 +56,7 @@ HeaderNode.prototype.update = function() {
 function DescriptionNode(game) {
 	this.game = game;
 	this.node = document.createElement('div');
+	this.node.style.pointerEvents = 'none';
 	this.node.innerHTML = '\
 		<p class="description"></p>\
 		<ul>\

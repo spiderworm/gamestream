@@ -1,13 +1,13 @@
 
 var Entity = require('../ecs/Entity.js');
 
-function FloorEntity() {
+function PlayerEntity() {
 	return new Entity({
 		physics: {
 			position: {
-				x: 0,
-				y: 0,
-				z: 0
+				x: -4 + (8 * Math.random()),
+				y: -4 + (8 * Math.random()),
+				z: .5
 			},
 			rotation: {
 				w: 1,
@@ -15,15 +15,18 @@ function FloorEntity() {
 				y: 0,
 				z: 0
 			},
-			static: true
+			friction: 0
+		},
+		view: {
+			color: 0xff00cc
 		},
 		shapes: [
 			{
 				type: 'cube',
 				size: {
-					x: 50,
-					y: 50,
-					z: .1
+					x: .5,
+					y: .5,
+					z: .5
 				},
 				position: {
 					x: 0,
@@ -32,10 +35,12 @@ function FloorEntity() {
 				}
 			}
 		],
-		view: {
-			color: 0x666666
+		controls: {
+			forward: 0,
+			jump: false,
+			turn: 0
 		}
 	});
 }
 
-module.exports = FloorEntity;
+module.exports = PlayerEntity;

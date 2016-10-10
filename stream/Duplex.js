@@ -1,14 +1,18 @@
 
-var Writable = require('./Writable.js');
-var Readable = require('./Readable.js');
+var Stream = require('stream');
 var inherits = require('inherits');
+var PipeBag = require('./PipeBag.js');
 
 function Duplex() {
-	Writable.call(this);
-	Readable.call(this);
+	Stream.call(this, { objectMode: true });
+	this._pipes = new PipeBag(this);
+	PipeBag.exposeInterface(this, this._pipes);
 }
 
-inherits(Duplex, Writable);
-inherits(Duplex, Readable);
+inherits(Duplex, Stream);
+
+Duplex.prototype.write = function() {
+	console.error('Duplex.write not implemented');	
+};
 
 module.exports = Duplex;

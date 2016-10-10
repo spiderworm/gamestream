@@ -9,7 +9,7 @@ function Writable() {
 inherits(Writable, Stream);
 
 Writable.prototype.write = function() {
-	console.error('write method not implemented');	
+	console.error('Writable.write not implemented');	
 };
 
 module.exports = Writable;

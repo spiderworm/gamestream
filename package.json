@@ -26,6 +26,8 @@
     "cannon": "^0.6.2",
     "copy-webpack-plugin": "^3.0.1",
     "gh-pages": "^0.11.0",
+    "keystate": "0.0.1",
+    "keystate-fresh": "0.0.1",
     "merge": "^1.2.0",
     "three": "^0.81.2",
     "webpack-dev-server": "^1.16.1"
