@@ -1,19 +1,45 @@
 
 var Duplex = require('./Duplex.js');
 var inherits = require('inherits');
+var Config = require('../misc/Config.js');
+var objectFactory = require('../misc/objectFactory.js');
 
-function GameStreamDuplex() {
+var defaultConfig = new Config({
+	info: {}
+});
+
+function GameStreamDuplex(config) {
 	Duplex.call(this);
+	config = new Config(defaultConfig, [config]);
+	this._info = objectFactory.clone(config.info);
 }
 
 inherits(GameStreamDuplex, Duplex);
 
-GameStreamDuplex.prototype.requestDelegateFrom = function() {
-	console.error('requestDelegateFrom not implemented');
+Object.defineProperty(GameStreamDuplex.prototype, 'info', {
+	get: function() {
+		return objectFactory.clone(this._info);
+	}
+});
+
+GameStreamDuplex.prototype.delegate = function() {
+	console.error('delegate not implemented');
 };
 
-GameStreamDuplex.prototype.assignDelegate = function() {
-	console.error('assignDelegate not implemented');
+GameStreamDuplex.prototype.undelegate = function() {
+	console.error('undelegate not implemented');
+};
+
+GameStreamDuplex.prototype.hostDelegate = function() {
+	console.error('hostDelegate not implemented');
+};
+
+GameStreamDuplex.prototype.unhostDelegate = function() {
+	console.error('unhostDelegate not implemented');
+};
+
+GameStreamDuplex.prototype.requestDelegateFrom = function() {
+	console.error('requestDelegateFrom not implemented');
 };
 
 module.exports = GameStreamDuplex;

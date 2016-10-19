@@ -60,8 +60,6 @@ function GameStream(config) {
 
 	Config.apply(config, this);
 
-	this._info = objectFactory.clone(config.info);
-
 	this._playback.setTime(now() - this.lag);
 }
 
@@ -78,12 +76,6 @@ GameStream.events = {
 GameStream.isGameStream = function(obj) {
 	return true && obj.write;
 };
-
-Object.defineProperty(GameStream.prototype, 'info', {
-	get: function() {
-		return objectFactory.clone(this._info);
-	}
-});
 
 Object.defineProperty(GameStream.prototype, 'map', {
 	get: function() {
@@ -164,10 +156,6 @@ GameStream.prototype.tick = function() {
 
 GameStream.prototype.requestDelegateFrom = function(targetStream) {
 	targetStream.emit(GameStream.events.DELEGATE_REQUESTED, this);
-};
-
-GameStream.prototype.assignDelegate = function(delegateStream) {
-	this.emit(GameStream.events.DELEGATE_ASSIGNED, delegateStream);
 };
 
 GameStream.prototype.delegate = function(delegateStream, hostStream) {
