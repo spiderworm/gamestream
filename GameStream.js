@@ -30,7 +30,7 @@ function GameStream(config) {
 		return new GameStream(config);
 	}
 
-	GameStreamDuplex.call(this);
+	GameStreamDuplex.call(this, config);
 
 	this._stateFactory = new StateFactory();
 

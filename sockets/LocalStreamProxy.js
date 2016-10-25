@@ -13,7 +13,9 @@ var defaultPerms = new Config({
 });
 
 function LocalStreamProxy(stream, permissions) {
-	StreamProxy.call(this, null, stream);
+	StreamProxy.call(this, null, {
+		info: stream.info
+	});
 
 	this._perms = new Config(defaultPerms, [permissions]);
 
