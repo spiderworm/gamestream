@@ -26,13 +26,23 @@ RemoteStreamProxy.prototype.updateNow = function(update) {
 
 RemoteStreamProxy.prototype.hostDelegate = function(delegate) {
 	var delegateProxy = LocalStreamProxy.createFromStream(delegate, {
-		allowStateWrite: true
+		allowStateWrite: true,
+		allowMessages: true
 	});
 	this._connection.localProxies.add(delegateProxy);
 	var packet = new Packet.CommandPacket(
 		GameStream.events.DELEGATE_HOSTED,
 		this.toObject(),
 		delegateProxy.toObject()
+	);
+	this._connection.send(packet);
+};
+
+RemoteStreamProxy.prototype.message = function(msg) {
+	var packet = new Packet.EventPacket(
+		'message',
+		this.toObject(),
+		msg
 	);
 	this._connection.send(packet);
 };

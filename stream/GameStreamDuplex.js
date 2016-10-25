@@ -22,6 +22,10 @@ Object.defineProperty(GameStreamDuplex.prototype, 'info', {
 	}
 });
 
+GameStreamDuplex.prototype.message = function(msg) {
+	this.emit('message', msg);
+};
+
 GameStreamDuplex.prototype.delegate = function() {
 	console.error('delegate not implemented');
 };

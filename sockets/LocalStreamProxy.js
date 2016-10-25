@@ -8,7 +8,8 @@ var Config = require('../misc/Config.js');
 var defaultPerms = new Config({
 	allowStateWrite: false,
 	allowDelegateHost: false,
-	allowDelegateRequest: false
+	allowDelegateRequest: false,
+	allowMessages: false
 });
 
 function LocalStreamProxy(stream, permissions) {
@@ -44,6 +45,12 @@ LocalStreamProxy.prototype._handleEventPacket = function(packet, connection) {
 			if (this._perms.allowDelegateRequest) {
 				var requestor = connection.remoteProxies.getProxyFromObject(packet.data);
 				this.target.emit(packet.eventType, requestor);
+			}
+		break;
+		case 'message':
+			if (this._perms.allowMessages) {
+				var msg = packet.data;
+				this.target.emit(packet.eventType, msg);
 			}
 		break;
 	}
