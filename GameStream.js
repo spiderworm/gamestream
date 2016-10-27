@@ -4,6 +4,7 @@ var inherits = require('inherits');
 var now = require('./misc/now.js');
 var PlaybackPointer = require('./playback/PlaybackPointer.js');
 var PlaybackControls = require('./playback/PlaybackControls.js');
+var Rewriter = require('./playback/Rewriter.js');
 var Mapper = require('./Mapper.js');
 var DelegateResolver = require('./DelegateResolver.js');
 var statesUtil = require('./states/statesUtil.js');
@@ -30,33 +31,29 @@ function GameStream(config) {
 		return new GameStream(config);
 	}
 
+	config = new Config(defaultConfig, [config]);
 	GameStreamDuplex.call(this, config);
 
-	this._stateFactory = new StateFactory();
-
-	this._store = new StatesTimeStore();
-
-	var playbackPointer = new PlaybackPointer(this._store);
-	this._playback = new PlaybackControls(playbackPointer);
-	PlaybackControls.exposeInterface(this, this._playback);
-
-	config = new Config(defaultConfig, [config]);
-
-	this._mapper = new Mapper(config.map);
-
-	this._delegates = new DelegateResolver();
-
 	this._outputBuffer = new Buffer();
-
 	this._emitter = new CustomWritable(this._emitGameUpdates.bind(this));
+	this._outputBuffer.pipe(this._emitter);
 
+	this._stateFactory = new StateFactory();
+	this._mapper = new Mapper(config.map);
+	this._delegates = new DelegateResolver();
+	this._store = new StatesTimeStore();
 	this._stateFactory.pipe(this._mapper);
 	this._mapper.pipe(this._delegates);
 	this._delegates.pipe(this._store);
-	this._delegates.pipe(this._playback);
 
+	var playbackPointer = new PlaybackPointer(this._store);
+	this._rewriter = new Rewriter(playbackPointer, this._store);
+	this._delegates.pipe(this._rewriter);
+	this._rewriter.pipe(this._outputBuffer);
+
+	this._playback = new PlaybackControls(playbackPointer);
+	PlaybackControls.exposeInterface(this, this._playback);
 	this._playback.pipe(this._outputBuffer);
-	this._outputBuffer.pipe(this._emitter);
 
 	Config.apply(config, this);
 

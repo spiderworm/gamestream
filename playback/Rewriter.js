@@ -1,6 +1,8 @@
 
 var inherits = require('inherits');
 var Duplex = require('../stream/Duplex.js');
+var RewriteOutputState = require('../states/RewriteOutputState.js');
+var CatchUpOutputState = require('../states/CatchUpOutputState.js');
 
 function Rewriter(pointer) {
 	Duplex.call(this);
@@ -11,29 +13,11 @@ function Rewriter(pointer) {
 inherits(Rewriter, Duplex);
 
 Rewriter.prototype.write = function(states) {
-	this._pipes.out(states);
-/*
-	states.forEach(function(state) {
-		var removedStates = this._pointer.purgeGeneratedStatesAfter(state.time);
+	this._outputRewrites(states);
+	return true;
+};
 
-		removedStates.forEach(function(removed) {
-			var history = this._pointer.getHistory(removed.time);
-			if (history.length > 0) {
-				history.forEach(function(point) {
-					
-				})
-			}
-		}.bind(this))
-
-
-
-		var history = this._pointer.getHistory(state.time);
-		if (history.length > 0) {
-
-		}
-	}.bind(this));
-
-
+Rewriter.prototype._outputRewrites = function(states) {
 	var rewrites = createRewriteStates(states, this._pointer);
 	if (rewrites.length > 0) {
 		var currentState = this._pointer.getCurrentState();
@@ -41,12 +25,9 @@ Rewriter.prototype.write = function(states) {
 		var unrewriteState = CatchUpOutputState.fromRewriteStates(rewrites, currentState, time);
 		this._pipes.out(rewrites.concat(unrewriteState));
 	}
-*/
 };
 
-/*
 function createRewriteStates(states, playbackPointer) {
-	var currentState = playbackPointer.getCurrentState();
 	var allRewrites = [];
 	states.forEach(function(state) {
 		var history = playbackPointer.getHistory(state.time);
@@ -59,6 +40,5 @@ function createRewriteStates(states, playbackPointer) {
 	});
 	return allRewrites;
 }
-*/
 
 module.exports = Rewriter;
