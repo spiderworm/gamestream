@@ -189,6 +189,14 @@ GameStream.prototype.unhostDelegate = function(delegateStream) {
 	this.emit(GameStream.events.DELEGATE_UNHOSTED, delegateStream);
 };
 
+GameStream.prototype.share = function(sharedStream, targetStream) {
+	targetStream.hostShared(sharedStream);
+};
+
+GameStream.prototype.hostShared = function(sharedStream) {
+	this.emit('stream-shared', sharedStream);
+};
+
 GameStream.prototype._updatePushing = function() {
 	if (this._pushIntervalID) {
 		clearInterval(this._pushIntervalID);

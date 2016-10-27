@@ -66,6 +66,10 @@ LocalStreamProxy.prototype._handleCommandPacket = function(packet, connection) {
 				this.target.hostDelegate(delegate);
 			}
 		break;
+		case 'host-shared':
+			var stream = connection.remoteProxies.getProxyFromObject(packet.data);
+			this.target.hostShared(stream);
+		break;
 		default:
 			console.error('LocalStreamProxy._handleEventPacket: no handler for', packet.commandType);
 		break;

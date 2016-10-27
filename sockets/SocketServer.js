@@ -24,13 +24,21 @@ var localProxies = new ProxyManager(
 	null
 );
 
-function SocketServer(config) {
-	config = new Config(defaultSocketConfig, [config]);
+function SocketServer(config, httpServer) {
 	Stream.call(this, { objectMode: true });
 
 	this._connections = [];
 
-	this._socketServer = new WebSocketServer({ port: config.port });
+	var socketConfig;
+
+	if (httpServer) {
+		socketConfig = { server: httpServer };
+	} else {
+		config = new Config(defaultSocketConfig, [config]);
+		socketConfig = { port: config.port };
+	}
+
+	this._socketServer = new WebSocketServer(socketConfig);
 
 	this._socketServer.on('connection', function(socket) {
 		var connection = new ServerSideConnection(socket, localProxies);

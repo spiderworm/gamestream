@@ -17,7 +17,9 @@ function ClientSideConnection(config, localProxies) {
 		}.bind(this)
 	);
 
-	var url = 'ws://' + config.host + ':' + config.port + config.path;
+	var protocol = config.ssl ? 'wss' : 'ws';
+
+	var url = protocol + '://' + config.host + ':' + config.port + '/' + config.path;
 
 	this._socket = new WebSocket(url);
 	this._socket.addEventListener('message', this._handleMessage.bind(this));

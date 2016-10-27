@@ -46,4 +46,12 @@ GameStreamDuplex.prototype.requestDelegateFrom = function() {
 	console.error('requestDelegateFrom not implemented');
 };
 
+GameStreamDuplex.prototype.share = function() {
+	console.error('share not implemented');
+};
+
+GameStreamDuplex.prototype.hostShared = function() {
+	console.error('hostShared not implemented');
+};
+
 module.exports = GameStreamDuplex;

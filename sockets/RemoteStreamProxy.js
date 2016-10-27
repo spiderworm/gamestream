@@ -47,6 +47,20 @@ RemoteStreamProxy.prototype.message = function(msg) {
 	this._connection.send(packet);
 };
 
+RemoteStreamProxy.prototype.hostShared = function(targetStream) {
+	var proxy = LocalStreamProxy.createFromStream(targetStream, {
+		allowStateWrite: true,
+		allowMessages: true
+	});
+	this._connection.localProxies.add(proxy);
+	var packet = new Packet.CommandPacket(
+		'host-shared',
+		this.toObject(),
+		proxy.toObject()
+	);
+	this._connection.send(packet);
+};
+
 RemoteStreamProxy.prototype._requestDelegate = function(targetStream) {
 	var packet = new Packet.EventPacket(
 		GameStream.events.DELEGATE_REQUESTED,
