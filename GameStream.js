@@ -139,6 +139,15 @@ GameStream.prototype.updateNow = function(update) {
 	this.updateAt(time, update);
 };
 
+GameStream.prototype.watch = function(event, callback) {
+	switch(event) {
+		case GameStream.events.DELEGATE_HOSTED:
+			this.on(event, callback);
+			this._delegates.hostedDelegates.forEach(callback);
+		break;
+	}
+};
+
 GameStream.prototype.setStateAt = function(time, values) {
 	throw new Error('TODO: implement me');
 	//var state = new GameState(time, values);

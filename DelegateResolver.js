@@ -16,6 +16,10 @@ function DelegateResolver() {
 
 inherits(DelegateResolver, Duplex);
 
+Object.defineProperty(DelegateResolver.prototype, 'hostedDelegates', {
+	get: function() { return this._hostedDelegates.concat([]); }
+});
+
 DelegateResolver.prototype.write = function(data) {
 	this._handleStreamedFullData(data);
 	return true;

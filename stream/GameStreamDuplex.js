@@ -26,6 +26,10 @@ GameStreamDuplex.prototype.message = function(msg) {
 	this.emit('message', msg);
 };
 
+GameStreamDuplex.prototype.watch = function() {
+	console.error('watch not implemented');
+};
+
 GameStreamDuplex.prototype.delegate = function() {
 	console.error('delegate not implemented');
 };
