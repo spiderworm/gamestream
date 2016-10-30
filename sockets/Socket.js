@@ -4,7 +4,6 @@ var Readable = require('../stream/Readable.js');
 var defaultSocketConfig = require('./defaultSocketConfig.js');
 var Config = require('../misc/Config.js');
 var Packet = require('./Packet.js');
-var packetEncryptor = require('./packetEncryptor.js');
 var LocalStreamProxy = require('./LocalStreamProxy.js');
 var ProxyManager = require('./ProxyManager.js');
 var RemoteStreamProxy = require('./RemoteStreamProxy.js');

@@ -1,7 +1,7 @@
 
 var inherits = require('inherits');
 var EventEmitter = require('events').EventEmitter;
-var packetEncryptor = require('./packetEncryptor.js');
+var jsonUtil = require('../misc/jsonUtil.js');
 var ProxyManager = require('./ProxyManager.js');
 var RemoteStreamProxy = require('./RemoteStreamProxy.js');
 
@@ -35,7 +35,7 @@ function ServerSideConnection(socket, localProxies) {
 inherits(ServerSideConnection, EventEmitter);
 
 ServerSideConnection.prototype.send = function(packet) {
-	var encrypted = packetEncryptor.encrypt(packet);
+	var encrypted = jsonUtil.stringify(packet);
 	this._socket.send(encrypted);
 };
 
@@ -44,7 +44,7 @@ ServerSideConnection.prototype.isOpen = function() {
 };
 
 ServerSideConnection.prototype._handleMessage = function(message) {
-	var packet = packetEncryptor.decrypt(message);
+	var packet = jsonUtil.parse(message);
 	this.emit('packet', packet);
 };
 
