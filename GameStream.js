@@ -1,239 +1,43 @@
 
-var GameStreamDuplex = require('./stream/GameStreamDuplex.js');
 var inherits = require('inherits');
-var now = require('./misc/now.js');
-var PlaybackPointer = require('./playback/PlaybackPointer.js');
-var PlaybackControls = require('./playback/PlaybackControls.js');
-var Rewriter = require('./playback/Rewriter.js');
-var Mapper = require('./Mapper.js');
-var DelegateResolver = require('./DelegateResolver.js');
-var statesUtil = require('./states/statesUtil.js');
-var CustomWritable = require('./stream/CustomWritable.js');
 var Config = require('./misc/Config.js');
-var StateFactory = require('./states/factories/StateFactory.js');
-var StatesTimeStore = require('./storage/StatesTimeStore.js');
-var Buffer = require('./storage/Buffer.js');
-var ConsoleLogger = require('./debug/ConsoleLogger.js');
-var objectFactory = require('./misc/objectFactory.js');
+var Duplex = require('./stream/Duplex.js');
+var Readable = require('./stream/Readable.js');
+var InputToStatePipe = require('./state/InputToStatePipe.js');
+var StatesStore = require('./state/StatesStore.js');
 
 var defaultConfig = new Config({
-	push: true,
-	pushInterval: 0,
-	lag: 0,
-	fullDataMode: false,
-	maxStorage: 1000,
-	map: null,
 	info: {}
 });
 
 function GameStream(config) {
-	if (!(this instanceof GameStream)) {
-		return new GameStream(config);
-	}
+	Duplex.call(this);
 
 	config = new Config(defaultConfig, [config]);
-	GameStreamDuplex.call(this, config);
 
-	this._outputBuffer = new Buffer();
-	this._emitter = new CustomWritable(this._emitGameUpdates.bind(this));
-	this._outputBuffer.pipe(this._emitter);
+	this.info = config.info;
 
-	this._stateFactory = new StateFactory();
-	this._mapper = new Mapper(config.map);
-	this._delegates = new DelegateResolver();
-	this._store = new StatesTimeStore();
-	this._stateFactory.pipe(this._mapper);
-	this._mapper.pipe(this._delegates);
-	this._delegates.pipe(this._store);
-
-	var playbackPointer = new PlaybackPointer(this._store);
-	this._rewriter = new Rewriter(playbackPointer, this._store);
-	this._delegates.pipe(this._rewriter);
-	this._rewriter.pipe(this._outputBuffer);
-
-	this._playback = new PlaybackControls(playbackPointer);
-	PlaybackControls.exposeInterface(this, this._playback);
-	this._playback.pipe(this._outputBuffer);
-
-	Config.apply(config, this);
-
-	this._playback.setTime(now() - this.lag);
+	this._input = new InputToStatePipe();
+	this._output = new StatesStore();
+	this._input.pipe(this._output);
 }
 
-inherits(GameStream, GameStreamDuplex);
+inherits(GameStream, Duplex);
 
-GameStream.events = {
-	DELEGATE_REQUESTED: 'delegate-requested',
-	DELEGATE_ADDED: 'delegate-added',
-	DELEGATE_REMOVED: 'delegate-removed',
-	DELEGATE_HOSTED: 'delegate-hosted',
-	DELEGATE_UNHOSTED: 'delegate-unhosted'
+GameStream.prototype.updateNow = function(inputState) {
+	this.updateAt(Date.now(), inputState);
 };
 
-GameStream.isGameStream = function(obj) {
-	return true && obj.write;
+GameStream.prototype.updateAt = function(time, inputState) {
+	this.write([{ time: time, update: inputState }]);
 };
 
-Object.defineProperty(GameStream.prototype, 'map', {
-	get: function() {
-		return objectFactory.clone(this._mapper.map);
+GameStream.prototype.write = function(states) {
+	if (this.debug) {
+		debugger;
 	}
-});
-
-Object.defineProperty(GameStream.prototype, 'state', {
-	get: function() { return this.getState(); },
-	set: function(stateValues) { this.setStateAt(this.getTime(), stateValues); }
-});
-
-Object.defineProperty(GameStream.prototype, 'fullDataMode', {
-	get: function() { return this._fullDataMode; },
-	set: function(val) {
-		val = !!val;
-		if (val !== this._fullDataMode) {
-			this._fullDataMode = val;
-			this._updatePushing();
-		}
-	}
-});
-
-Object.defineProperty(GameStream.prototype, 'push', {
-	get: function() { return this._push; },
-	set: function(val) {
-		val = !!val;
-		if (val !== this._push) {
-			this._push = val;
-			this._updatePushing();
-		}
-	}
-});
-
-Object.defineProperty(GameStream.prototype, 'pushInterval', {
-	get: function() { return this._pushInterval; },
-	set: function(val) {
-		val = val > 0 ? val : 0;
-		if (val !== this._pushInterval) {
-			this._pushInterval = val;
-			this._updatePushing();
-		}
-	}
-});
-
-Object.defineProperty(GameStream.prototype, 'maxStorage', {
-	get: function() { return this._store.maxLength; },
-	set: function(v) { this._store.maxLength = v; }
-});
-
-GameStream.prototype.write = function(inputStates) {
-	return this._stateFactory.write(inputStates);
-};
-
-GameStream.prototype.updateAt = function(time, update) {
-	this.write([{time: time, update: update}]);
-};
-
-GameStream.prototype.updateNow = function(update) {
-	var time = now();
-	this.updateAt(time, update);
-};
-
-GameStream.prototype.watch = function(event, callback) {
-	switch(event) {
-		case GameStream.events.DELEGATE_HOSTED:
-			this.on(event, callback);
-			this._delegates.hostedDelegates.forEach(callback);
-		break;
-	}
-};
-
-GameStream.prototype.setStateAt = function(time, values) {
-	throw new Error('TODO: implement me');
-	//var state = new GameState(time, values);
-};
-
-GameStream.prototype.getState = function() {
-	var gameState = this._playback.getState();
-	return gameState || undefined;
-};
-
-GameStream.prototype.tick = function() {
-	this._playback.tick();
-	this._outputBuffer.flush();
-};
-
-GameStream.prototype.requestDelegateFrom = function(targetStream) {
-	targetStream.emit(GameStream.events.DELEGATE_REQUESTED, this);
-};
-
-GameStream.prototype.delegate = function(delegateStream, hostStream) {
-	if (!GameStream.isGameStream(delegateStream)) {
-		var config = delegateStream;
-		delegateStream = new GameStream(config);
-	}
-	this._delegates.addDelegate(delegateStream);
-	this.emit(GameStream.events.DELEGATE_ADDED, delegateStream);
-	if (hostStream) {
-		hostStream.hostDelegate(delegateStream);
-	}
-	return delegateStream;
-};
-
-GameStream.prototype.undelegate = function(delegateStream, hostStream) {
-	if (hostStream) {
-		hostStream.unhostDelegate(delegateStream);
-	}
-	this._delegates.removeDelegate(delegateStream, hostStream);
-	this.emit(GameStream.events.DELEGATE_REMOVED, delegateStream);
-};
-
-GameStream.prototype.hostDelegate = function(delegateStream) {
-	this._delegates.hostDelegate(delegateStream);
-	this.emit(GameStream.events.DELEGATE_HOSTED, delegateStream);
-};
-
-GameStream.prototype.unhostDelegate = function(delegateStream) {
-	this._delegates.unhostDelegate(delegateStream);
-	this.emit(GameStream.events.DELEGATE_UNHOSTED, delegateStream);
-};
-
-GameStream.prototype.share = function(sharedStream, targetStream) {
-	targetStream.hostShared(sharedStream);
-};
-
-GameStream.prototype.hostShared = function(sharedStream) {
-	this.emit('stream-shared', sharedStream);
-};
-
-GameStream.prototype._updatePushing = function() {
-	if (this._pushIntervalID) {
-		clearInterval(this._pushIntervalID);
-		delete this._pushIntervalID;
-	}
-	if (this._eventPushStream) {
-		this._pipes.unpipe(this._eventPushStream);
-		delete this._eventPushStream;
-	}
-	if (this._push) {
-		this._pushIntervalID = setInterval(
-			this.tick.bind(this),
-			this._pushInterval
-		);
-		if (this._fullDataMode) {
-			this._eventPushStream = new CustomWritable(function(states) {
-				this.emit('full-data', states);
-			}.bind(this));
-		} else {
-			this._eventPushStream = new CustomWritable(function(states) {
-				this.emit('data', statesUtil.merge(states));
-			}.bind(this));
-		}
-		this._pipes.pipe(this._eventPushStream);
-	}
-};
-
-GameStream.prototype._emitGameUpdates = function(gameUpdates) {
-	if (gameUpdates.length) {
-		this._pipes.out(gameUpdates);
-	}
+	this._input.write(states);
+	this.push(states);
 };
 
 module.exports = GameStream;

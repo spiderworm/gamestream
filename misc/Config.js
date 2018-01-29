@@ -1,13 +1,13 @@
 
-var objectFactory = require('./objectFactory.js');
+var objectHero = require('object-hero');
 
-var assignNarrow = objectFactory.createFactory({
+var assignNarrow = objectHero.createFactory({
 	clone: false,
 	deep: false,
 	narrow: true
 });
 
-var assign = objectFactory.createFactory({
+var assign = objectHero.createFactory({
 	clone: false,
 	narrow: false,
 	deep: true

@@ -2,7 +2,6 @@
 var Stream = require('stream');
 var inherits = require('inherits');
 var Config = require('../misc/Config.js');
-var now = require('../misc/now.js');
 var jsonUtil = require('../misc/jsonUtil.js');
 
 var defaultConfig = new Config({
@@ -37,7 +36,7 @@ ConsoleLogger.prototype.write = function(datas) {
 };
 
 ConsoleLogger.prototype.log = function(datas) {
-	var time = now();
+	var time = Date.now();
 	if (!datas.forEach) {
 		datas = [datas];
 	}
