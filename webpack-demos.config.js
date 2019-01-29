@@ -1,4 +1,6 @@
 
+var path = require("path");
+
 var webpackDemosConfig = {
 	entry: {
 		"index": "./test/demos/index.js",
@@ -7,7 +9,7 @@ var webpackDemosConfig = {
 		"client-server": "./test/demos/client-server.js"
 	},
 	output: {
-		path: "./built/",
+		path: path.resolve(__dirname, "built"),
 		filename: "./test/demos/[name].js"
 	},
 	devtool: 'source-map',
